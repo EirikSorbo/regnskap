@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
-import { ref, deleteObject } from 'firebase/storage'
-import { db, storage, auth } from '../firebase'
+import { db, auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount } from '../types'
 import { useNavigate } from 'react-router-dom'
@@ -62,10 +61,6 @@ export default function DashboardPage() {
     if (!confirm('Slett denne oppføringen?')) return
     try {
       await deleteDoc(doc(db, 'receipts', entry.id))
-      if (entry.entryType === 'receipt') {
-        const storageRef = ref(storage, (entry as ReceiptEntry).imagePath)
-        await deleteObject(storageRef)
-      }
     } catch (e) { console.error(e) }
   }
 
@@ -216,8 +211,11 @@ function EntryList({ entries, expandedId, setExpandedId, onDelete, getAmount }: 
                     {e.description && <p><span className="font-medium">Beskrivelse:</span> {e.description}</p>}
                   </div>
                 ) : (
-                  <img src={(e as ReceiptEntry).imageUrl} alt="kvittering"
-                    className="w-full max-h-72 object-contain rounded-lg border border-slate-200" />
+                  <div className="text-sm text-slate-600 space-y-1">
+                    <p><span className="font-medium">Beløp:</span> {(e as ReceiptEntry).amount?.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
+                    <p><span className="font-medium">Kategori:</span> {e.category.label}</p>
+                    {e.description && <p><span className="font-medium">Beskrivelse:</span> {e.description}</p>}
+                  </div>
                 )}
                 <div className="flex justify-end">
                   <button onClick={() => onDelete(e)}

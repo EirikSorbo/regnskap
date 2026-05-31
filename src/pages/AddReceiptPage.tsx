@@ -1,7 +1,6 @@
-import { useState, useRef } from 'react'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { useState } from 'react'
 import { collection, addDoc } from 'firebase/firestore'
-import { storage, db } from '../firebase'
+import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { CATEGORIES, DRIVING_CATEGORY } from '../types'
 import { useNavigate } from 'react-router-dom'
@@ -10,15 +9,11 @@ import { format } from 'date-fns'
 export default function AddReceiptPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [categoryPost, setCategoryPost] = useState(CATEGORIES[0].post)
   const isDriving = categoryPost === DRIVING_CATEGORY.post
 
   // Receipt fields
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
-  const [isPdf, setIsPdf] = useState(false)
   const [amount, setAmount] = useState('')
 
   // Driving fields
@@ -31,37 +26,20 @@ export default function AddReceiptPage() {
   // Shared
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [description, setDescription] = useState('')
-  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImageFile(file)
-    setIsPdf(file.type === 'application/pdf')
-    setPreview(URL.createObjectURL(file))
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (!file) return
-    setImageFile(file)
-    setIsPdf(file.type === 'application/pdf')
-    setPreview(URL.createObjectURL(file))
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!user) return
     setError('')
-    setUploading(true)
+    setSaving(true)
 
     try {
       const category = CATEGORIES.find(c => c.post === categoryPost)!
 
       if (isDriving) {
-        if (!from || !to || !distance) { setError('Fyll inn fra, til og avstand.'); setUploading(false); return }
+        if (!from || !to || !distance) { setError('Fyll inn fra, til og avstand.'); setSaving(false); return }
         await addDoc(collection(db, 'receipts'), {
           userId: user.uid,
           entryType: 'driving',
@@ -76,17 +54,10 @@ export default function AddReceiptPage() {
           createdAt: Date.now(),
         })
       } else {
-        if (!imageFile) { setError('Du må velge et bilde av kvitteringen.'); setUploading(false); return }
-        if (!amount || isNaN(Number(amount))) { setError('Ugyldig beløp.'); setUploading(false); return }
-        const imagePath = `receipts/${user.uid}/${Date.now()}_${imageFile.name}`
-        const storageRef = ref(storage, imagePath)
-        await uploadBytes(storageRef, imageFile)
-        const imageUrl = await getDownloadURL(storageRef)
+        if (!amount || isNaN(Number(amount))) { setError('Ugyldig beløp.'); setSaving(false); return }
         await addDoc(collection(db, 'receipts'), {
           userId: user.uid,
           entryType: 'receipt',
-          imageUrl,
-          imagePath,
           amount: parseFloat(amount),
           date,
           category,
@@ -98,7 +69,7 @@ export default function AddReceiptPage() {
     } catch (err: unknown) {
       if (err instanceof Error) setError(err.message)
     } finally {
-      setUploading(false)
+      setSaving(false)
     }
   }
 
@@ -107,7 +78,7 @@ export default function AddReceiptPage() {
       <header className="bg-white border-b border-slate-200 px-4 py-4 flex items-center gap-3">
         <button onClick={() => navigate('/')} className="text-slate-500 hover:text-slate-800 text-xl">←</button>
         <h1 className="text-lg font-semibold text-slate-800">
-          {isDriving ? 'Legg til kjøring' : 'Legg til kvittering'}
+          {isDriving ? 'Legg til kjøring' : 'Legg til utgift'}
         </h1>
       </header>
 
@@ -129,7 +100,6 @@ export default function AddReceiptPage() {
 
         {isDriving ? (
           <>
-            {/* From */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Fra</label>
               <input type="text" value={from} onChange={e => setFrom(e.target.value)} required
@@ -137,7 +107,6 @@ export default function AddReceiptPage() {
                 placeholder="F.eks. Oslo" />
             </div>
 
-            {/* To */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Til</label>
               <input type="text" value={to} onChange={e => setTo(e.target.value)} required
@@ -145,18 +114,15 @@ export default function AddReceiptPage() {
                 placeholder="F.eks. Bergen" />
             </div>
 
-            {/* Trip type */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Tur/retur</label>
               <div className="flex gap-3">
-                <button type="button"
-                  onClick={() => setTripType('one-way')}
+                <button type="button" onClick={() => setTripType('one-way')}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition
                     ${tripType === 'one-way' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-300'}`}>
                   Enveis
                 </button>
-                <button type="button"
-                  onClick={() => setTripType('return')}
+                <button type="button" onClick={() => setTripType('return')}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition
                     ${tripType === 'return' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-300'}`}>
                   Tur/retur
@@ -164,23 +130,21 @@ export default function AddReceiptPage() {
               </div>
             </div>
 
-            {/* Distance */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Avstand (km) {tripType === 'return' ? '— én vei' : ''}
+                Avstand (km){tripType === 'return' ? ' — én vei' : ''}
               </label>
               <input type="number" value={distance} onChange={e => setDistance(e.target.value)} required
                 min="0" step="0.1"
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="0" />
-              {distance && (
+              {distance && !isNaN(parseFloat(distance)) && (
                 <p className="text-xs text-slate-400 mt-1">
                   Totalt: {tripType === 'return' ? parseFloat(distance) * 2 : parseFloat(distance)} km
                 </p>
               )}
             </div>
 
-            {/* Passengers */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Antall passasjerer (valgfritt)</label>
               <input type="number" value={passengers} onChange={e => setPassengers(e.target.value)}
@@ -190,63 +154,22 @@ export default function AddReceiptPage() {
             </div>
           </>
         ) : (
-          <>
-            {/* Image upload */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Kvittering / bilde</label>
-              <div
-                className={`border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition
-                  ${preview ? 'border-blue-400 bg-blue-50' : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50'}`}
-                style={{ minHeight: 160 }}
-                onClick={() => fileInputRef.current?.click()}
-                onDrop={handleDrop}
-                onDragOver={e => e.preventDefault()}
-              >
-                {preview ? (
-                  isPdf ? (
-                    <div className="flex flex-col items-center justify-center p-6 text-blue-600">
-                      <div className="text-5xl mb-2">📄</div>
-                      <p className="text-sm font-medium">{imageFile?.name}</p>
-                      <p className="text-xs text-slate-400 mt-1">PDF klar for opplasting</p>
-                    </div>
-                  ) : (
-                    <img src={preview} alt="preview" className="max-h-48 rounded-lg object-contain p-2" />
-                  )
-                ) : (
-                  <div className="text-center p-6">
-                    <div className="text-4xl mb-2">📷</div>
-                    <p className="text-sm text-slate-500">Trykk for å ta bilde eller velge fil</p>
-                    <p className="text-xs text-slate-400 mt-1">JPG, PNG, PDF</p>
-                  </div>
-                )}
-              </div>
-              <input ref={fileInputRef} type="file" accept="image/*,application/pdf"
-                capture="environment" onChange={handleFileChange} className="hidden" />
-              {preview && (
-                <button type="button" onClick={() => { setImageFile(null); setPreview(null); setIsPdf(false) }}
-                  className="mt-2 text-xs text-red-500 hover:underline">Fjern bilde</button>
-              )}
-            </div>
-
-            {/* Amount */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Beløp (kr)</label>
-              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} required
-                min="0" step="0.01"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0.00" />
-            </div>
-          </>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Beløp (kr)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} required
+              min="0" step="0.01"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.00" />
+            <p className="text-xs text-slate-400 mt-1">💡 Ta bilde av kvitteringen og lagre den i kamerarullen din.</p>
+          </div>
         )}
 
-        {/* Date */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Dato</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} required
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Beskrivelse {isDriving ? '' : '(valgfritt)'}</label>
           <input type="text" value={description} onChange={e => setDescription(e.target.value)}
@@ -258,9 +181,9 @@ export default function AddReceiptPage() {
           <p className="text-red-500 text-xs bg-red-50 border border-red-200 rounded p-2">{error}</p>
         )}
 
-        <button type="submit" disabled={uploading}
+        <button type="submit" disabled={saving}
           className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 rounded-xl transition text-base">
-          {uploading ? 'Lagrer...' : '💾 Lagre'}
+          {saving ? 'Lagrer...' : '💾 Lagre'}
         </button>
       </form>
     </div>
