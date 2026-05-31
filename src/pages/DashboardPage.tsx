@@ -66,7 +66,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
-              <h1 className="text-base font-bold text-slate-800">Sørbø Musikk Regnskap</h1>
+              <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
               <p className="text-xs text-slate-400">{user?.email}</p>
             </div>
           </div>

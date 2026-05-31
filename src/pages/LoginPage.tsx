@@ -22,7 +22,7 @@ export default function LoginPage() {
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="/regnskap/logo.png" alt="Sørbø Musikk" className="w-24 h-24 mx-auto mb-3 object-contain" />
-          <h1 className="text-2xl font-bold text-slate-800">Sørbø Musikk Regnskap</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Sørbø Musikk</h1>
         </div>
 
         {error && (
