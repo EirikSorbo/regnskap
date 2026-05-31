@@ -64,9 +64,9 @@ export default function DashboardPage() {
       <header className="bg-white border-b border-slate-200 px-4 py-4">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">🧾</span>
+            <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
-              <h1 className="text-base font-bold text-slate-800">Regnskapsapp</h1>
+              <h1 className="text-base font-bold text-slate-800">Sørbø Musikk Regnskap</h1>
               <p className="text-xs text-slate-400">{user?.email}</p>
             </div>
           </div>

@@ -21,9 +21,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🧾</div>
-          <h1 className="text-2xl font-bold text-slate-800">Regnskapsapp</h1>
-          <p className="text-slate-500 text-sm mt-1">For musikere & frilansere</p>
+          <img src="/regnskap/logo.png" alt="Sørbø Musikk" className="w-24 h-24 mx-auto mb-3 object-contain" />
+          <h1 className="text-2xl font-bold text-slate-800">Sørbø Musikk Regnskap</h1>
         </div>
 
         {error && (
@@ -42,10 +41,6 @@ export default function LoginPage() {
           </svg>
           Logg inn med Google
         </button>
-
-        <p className="text-center text-xs text-slate-400 mt-6">
-          Dine data lagres sikkert og er kun tilgjengelig for deg.
-        </p>
       </div>
     </div>
   )
