@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import { db, storage, auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
@@ -22,12 +22,16 @@ export default function DashboardPage() {
     if (!user) return
     const q = query(
       collection(db, 'receipts'),
-      where('userId', '==', user.uid),
-      orderBy('date', 'desc')
+      where('userId', '==', user.uid)
     )
     const unsub = onSnapshot(q, snap => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Receipt))
+      // Sort client-side to avoid needing a Firestore composite index
+      data.sort((a, b) => b.date.localeCompare(a.date))
       setReceipts(data)
+      setLoading(false)
+    }, err => {
+      console.error('Firestore error:', err)
       setLoading(false)
     })
     return unsub
