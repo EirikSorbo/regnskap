@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
-import { db, auth } from '../firebase'
+import { ref, deleteObject } from 'firebase/storage'
+import { db, auth, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount } from '../types'
 import { useNavigate } from 'react-router-dom'
@@ -60,6 +61,9 @@ export default function DashboardPage() {
     if (!entry.id) return
     if (!confirm('Slett denne oppføringen?')) return
     try {
+      if (entry.entryType === 'receipt' && (entry as import('../types').ReceiptEntry).imagePath) {
+        try { await deleteObject(ref(storage, (entry as import('../types').ReceiptEntry).imagePath)) } catch {}
+      }
       await deleteDoc(doc(db, 'receipts', entry.id))
     } catch (e) { console.error(e) }
   }
@@ -215,6 +219,19 @@ function EntryList({ entries, expandedId, setExpandedId, onDelete, getAmount }: 
                     <p><span className="font-medium">Beløp:</span> {(e as ReceiptEntry).amount?.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
                     <p><span className="font-medium">Kategori:</span> {e.category.label}</p>
                     {e.description && <p><span className="font-medium">Beskrivelse:</span> {e.description}</p>}
+                    {(e as ReceiptEntry).imageUrl && (
+                      (e as ReceiptEntry).imageUrl.includes('.pdf') || (e as ReceiptEntry).imagePath?.endsWith('.pdf') ? (
+                        <a href={(e as ReceiptEntry).imageUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs mt-1">
+                          📄 Åpne PDF-kvittering
+                        </a>
+                      ) : (
+                        <a href={(e as ReceiptEntry).imageUrl} target="_blank" rel="noopener noreferrer">
+                          <img src={(e as ReceiptEntry).imageUrl} alt="Kvittering"
+                            className="mt-2 rounded-lg border border-slate-200 max-h-48 object-contain w-full" />
+                        </a>
+                      )
+                    )}
                   </div>
                 )}
                 <div className="flex justify-end">

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { collection, addDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { CATEGORIES, DRIVING_CATEGORY } from '../types'
 import { useNavigate } from 'react-router-dom'
@@ -22,6 +23,10 @@ export default function AddReceiptPage() {
   const [tripType, setTripType] = useState<'one-way' | 'return'>('one-way')
   const [distance, setDistance] = useState('')
   const [passengers, setPassengers] = useState('')
+
+  // File attachment
+  const [file, setFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Shared
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -55,6 +60,14 @@ export default function AddReceiptPage() {
         })
       } else {
         if (!amount || isNaN(Number(amount))) { setError('Ugyldig beløp.'); setSaving(false); return }
+        let imageUrl = ''
+        let imagePath = ''
+        if (file) {
+          imagePath = `receipts/${user.uid}/${Date.now()}_${file.name}`
+          const storageRef = ref(storage, imagePath)
+          await uploadBytes(storageRef, file)
+          imageUrl = await getDownloadURL(storageRef)
+        }
         await addDoc(collection(db, 'receipts'), {
           userId: user.uid,
           entryType: 'receipt',
@@ -62,6 +75,8 @@ export default function AddReceiptPage() {
           date,
           category,
           description,
+          imageUrl,
+          imagePath,
           createdAt: Date.now(),
         })
       }
@@ -160,7 +175,29 @@ export default function AddReceiptPage() {
               min="0" step="0.01"
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="0.00" />
-            <p className="text-xs text-slate-400 mt-1">💡 Ta bilde av kvitteringen og lagre den i kamerarullen din.</p>
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Vedlegg (bilde / PDF)</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                capture="environment"
+                className="hidden"
+                onChange={e => setFile(e.target.files?.[0] ?? null)}
+              />
+              {file ? (
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  <span className="text-green-600 text-sm flex-1 truncate">✅ {file.name}</span>
+                  <button type="button" onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                    className="text-xs text-slate-500 hover:text-red-500">Fjern</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-slate-300 rounded-lg py-3 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-500 transition">
+                  📎 Legg ved kvittering (valgfritt)
+                </button>
+              )}
+            </div>
           </div>
         )}
 
