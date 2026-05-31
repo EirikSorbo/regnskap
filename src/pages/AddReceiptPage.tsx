@@ -1,21 +1,36 @@
-import { useState, useRef } from 'react'
-import { collection, addDoc } from 'firebase/firestore'
+import { useState, useRef, useEffect } from 'react'
+import { collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { CATEGORIES, DRIVING_CATEGORY } from '../types'
-import { useNavigate } from 'react-router-dom'
+import { CATEGORIES, DRIVING_CATEGORY, type ReceiptEntry, type DrivingEntry } from '../types'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
+
+function IconPaperclip() {
+  return <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+}
+function IconCheck() {
+  return <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+}
+function IconArrowLeft() {
+  return <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+}
 
 export default function AddReceiptPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('edit')
+  const isEditing = !!editId
 
   const [categoryPost, setCategoryPost] = useState(CATEGORIES[0].post)
   const isDriving = categoryPost === DRIVING_CATEGORY.post
 
   // Receipt fields
   const [amount, setAmount] = useState('')
+  const [existingImageUrl, setExistingImageUrl] = useState('')
+  const [existingImagePath, setExistingImagePath] = useState('')
 
   // Driving fields
   const [from, setFrom] = useState('')
@@ -33,6 +48,33 @@ export default function AddReceiptPage() {
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [loadingEntry, setLoadingEntry] = useState(isEditing)
+
+  // Load existing entry if editing
+  useEffect(() => {
+    if (!editId) return
+    getDoc(doc(db, 'receipts', editId)).then(snap => {
+      if (!snap.exists()) { navigate('/'); return }
+      const data = snap.data()
+      setCategoryPost(data.category.post)
+      setDate(data.date)
+      setDescription(data.description || '')
+      if (data.entryType === 'driving') {
+        const d = data as DrivingEntry
+        setFrom(d.from)
+        setTo(d.to)
+        setTripType(d.tripType)
+        setDistance(String(d.distance))
+        setPassengers(d.passengers ? String(d.passengers) : '')
+      } else {
+        const r = data as ReceiptEntry
+        setAmount(String(r.amount))
+        setExistingImageUrl(r.imageUrl || '')
+        setExistingImagePath(r.imagePath || '')
+      }
+      setLoadingEntry(false)
+    })
+  }, [editId, navigate])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -45,40 +87,39 @@ export default function AddReceiptPage() {
 
       if (isDriving) {
         if (!from || !to || !distance) { setError('Fyll inn fra, til og avstand.'); setSaving(false); return }
-        await addDoc(collection(db, 'receipts'), {
-          userId: user.uid,
-          entryType: 'driving',
-          date,
-          category,
-          description,
-          from,
-          to,
-          tripType,
+        const data = {
+          entryType: 'driving' as const,
+          date, category, description,
+          from, to, tripType,
           distance: parseFloat(distance),
           passengers: passengers ? parseInt(passengers) : 0,
-          createdAt: Date.now(),
-        })
+        }
+        if (isEditing) {
+          await updateDoc(doc(db, 'receipts', editId!), data)
+        } else {
+          await addDoc(collection(db, 'receipts'), { userId: user.uid, ...data, createdAt: Date.now() })
+        }
       } else {
         if (!amount || isNaN(Number(amount))) { setError('Ugyldig beløp.'); setSaving(false); return }
-        let imageUrl = ''
-        let imagePath = ''
+        let imageUrl = existingImageUrl
+        let imagePath = existingImagePath
         if (file) {
           imagePath = `receipts/${user.uid}/${Date.now()}_${file.name}`
           const storageRef = ref(storage, imagePath)
           await uploadBytes(storageRef, file)
           imageUrl = await getDownloadURL(storageRef)
         }
-        await addDoc(collection(db, 'receipts'), {
-          userId: user.uid,
-          entryType: 'receipt',
+        const data = {
+          entryType: 'receipt' as const,
           amount: parseFloat(amount),
-          date,
-          category,
-          description,
-          imageUrl,
-          imagePath,
-          createdAt: Date.now(),
-        })
+          date, category, description,
+          imageUrl, imagePath,
+        }
+        if (isEditing) {
+          await updateDoc(doc(db, 'receipts', editId!), data)
+        } else {
+          await addDoc(collection(db, 'receipts'), { userId: user.uid, ...data, createdAt: Date.now() })
+        }
       }
       navigate('/')
     } catch (err: unknown) {
@@ -88,12 +129,18 @@ export default function AddReceiptPage() {
     }
   }
 
+  if (loadingEntry) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 text-sm">Laster...</div>
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       <header className="bg-white border-b border-slate-200 px-4 py-4 flex items-center gap-3">
-        <button onClick={() => navigate('/')} className="text-slate-500 hover:text-slate-800 text-xl">←</button>
+        <button onClick={() => navigate('/')} className="text-slate-500 hover:text-slate-800 p-1 rounded-lg hover:bg-slate-100 transition">
+          <IconArrowLeft />
+        </button>
         <h1 className="text-lg font-semibold text-slate-800">
-          {isDriving ? 'Legg til kjøring' : 'Legg til utgift'}
+          {isEditing ? 'Rediger oppføring' : isDriving ? 'Legg til kjøring' : 'Legg til utgift'}
         </h1>
       </header>
 
@@ -187,14 +234,22 @@ export default function AddReceiptPage() {
               />
               {file ? (
                 <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                  <span className="text-green-600 text-sm flex-1 truncate">✅ {file.name}</span>
+                  <IconCheck />
+                  <span className="text-green-700 text-sm flex-1 truncate">{file.name}</span>
                   <button type="button" onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
-                    className="text-xs text-slate-500 hover:text-red-500">Fjern</button>
+                    className="text-xs text-slate-400 hover:text-red-500">Fjern</button>
+                </div>
+              ) : existingImageUrl ? (
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  <IconPaperclip />
+                  <span className="text-slate-600 text-sm flex-1 truncate">Eksisterende vedlegg</span>
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="text-xs text-blue-500 hover:text-blue-700">Bytt</button>
                 </div>
               ) : (
                 <button type="button" onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-slate-300 rounded-lg py-3 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-500 transition">
-                  📎 Legg ved kvittering (valgfritt)
+                  className="w-full border-2 border-dashed border-slate-300 rounded-lg py-3 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-500 transition flex items-center justify-center gap-2">
+                  <IconPaperclip /> Legg ved kvittering (valgfritt)
                 </button>
               )}
             </div>
@@ -220,7 +275,7 @@ export default function AddReceiptPage() {
 
         <button type="submit" disabled={saving}
           className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 rounded-xl transition text-base">
-          {saving ? 'Lagrer...' : '💾 Lagre'}
+          {saving ? 'Lagrer...' : isEditing ? 'Lagre endringer' : 'Lagre'}
         </button>
       </form>
     </div>
