@@ -190,6 +190,7 @@ export default function DashboardPage() {
   const [showIncome, setShowIncome] = useState(false)
   const [showDriving, setShowDriving] = useState(false)
   const [showHjemmekontor, setShowHjemmekontor] = useState(false)
+  const [showAvskrivninger, setShowAvskrivninger] = useState(false)
   const [hjemmekontorAmt, setHjemmekontorAmt] = useState('')
   const [savingHjemmekontor, setSavingHjemmekontor] = useState(false)
   const [avskrivningerAmt, setAvskrivningerAmt] = useState('')
@@ -580,17 +581,30 @@ export default function DashboardPage() {
 
               {/* Avskrivninger */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Avskrivninger</label>
-                <p className="text-xs text-slate-400 mb-2">Årsbeløp registreres på post 6000</p>
-                <div className="flex gap-2">
-                  <input type="number" value={avskrivningerAmt} onChange={e => setAvskrivningerAmt(e.target.value)}
-                    inputMode="decimal" min="0" step="1" placeholder="0"
-                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                  <button onClick={handleSaveAvskrivninger} disabled={savingAvskrivninger}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
-                    {savingAvskrivninger ? '...' : 'Lagre'}
-                  </button>
-                </div>
+                <button onClick={() => setShowAvskrivninger(!showAvskrivninger)}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
+                  <span>Avskrivninger {selectedYear}</span>
+                  <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
+                    {avskrivningerAmt && parseFloat(avskrivningerAmt) > 0 && (
+                      <span>{parseFloat(avskrivningerAmt).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+                    )}
+                    <IconChevron open={showAvskrivninger} />
+                  </span>
+                </button>
+                {showAvskrivninger && (
+                  <div className="mt-2">
+                    <p className="text-xs text-slate-400 mb-2">Årsbeløp registreres på post 6000</p>
+                    <div className="flex gap-2">
+                      <input type="number" value={avskrivningerAmt} onChange={e => setAvskrivningerAmt(e.target.value)}
+                        inputMode="decimal" min="0" step="1" placeholder="0"
+                        className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      <button onClick={handleSaveAvskrivninger} disabled={savingAvskrivninger}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
+                        {savingAvskrivninger ? '...' : 'Lagre'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-slate-100 pt-4">
