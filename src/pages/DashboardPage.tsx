@@ -26,6 +26,9 @@ function IconUpload() {
 function IconPhone() {
   return <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
 }
+function IconCar() {
+  return <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M13 16H11V6l-4 1-2 4H3a1 1 0 00-1 1v2a1 1 0 001 1h1m9-9h4l2 4h1a1 1 0 011 1v2a1 1 0 01-1 1h-1m-9 0h4" /></svg>
+}
 
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc, getDocs } from 'firebase/firestore'
@@ -181,7 +184,6 @@ export default function DashboardPage() {
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState(() => parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
-  const [activeTab, setActiveTab] = useState<'list' | 'report'>('list')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [ratePerKm, setRatePerKm] = useState(() => parseFloat(localStorage.getItem(RATE_KEY) || '3.50'))
   const [ratePerPassengerKm, setRatePerPassengerKm] = useState(() => parseFloat(localStorage.getItem(RATE_PASS_KEY) || '1.00'))
@@ -247,12 +249,6 @@ export default function DashboardPage() {
   const yearIncome = incomeEntries.filter(r => r.date.startsWith(String(selectedYear)))
   const totalExpenses = yearEntries.reduce((sum, e) => sum + getAmount(e), 0)
   const totalIncome = yearIncome.reduce((sum, e) => sum + e.amount, 0)
-
-  const byCategory = CATEGORIES.map(cat => {
-    const items = yearEntries.filter(e => e.category.post === cat.post)
-    const sum = items.reduce((s, e) => s + getAmount(e), 0)
-    return { ...cat, items, sum }
-  }).filter(c => c.sum > 0)
 
   async function handleDelete(entry: Entry) {
     if (!entry.id) return
@@ -434,10 +430,9 @@ export default function DashboardPage() {
       <header className="bg-white border-b border-slate-200 px-4 py-4">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.09</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.13</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -445,6 +440,11 @@ export default function DashboardPage() {
               className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
               title="Arkiv">
               <IconArchive />
+            </button>
+            <button onClick={() => navigate('/add?type=driving')}
+              className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
+              title="Registrer kjøring">
+              <IconCar />
             </button>
             <button onClick={() => setShowEkomModal(true)}
               className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
@@ -484,7 +484,7 @@ export default function DashboardPage() {
               <div>
                 <button onClick={() => setShowIncome(!showIncome)}
                   className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
-                  <span>Inntekter (post 3000)</span>
+                  <span>Inntekter</span>
                   <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
                     {totalIncome > 0 && <span>{totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>}
                     <IconChevron open={showIncome} />
@@ -492,6 +492,7 @@ export default function DashboardPage() {
                 </button>
                 {showIncome && (
                   <div className="space-y-2 mt-2">
+                    <p className="text-xs text-slate-400 mb-1">Inntekter registreres på post 3000</p>
                     <form onSubmit={handleAddIncome} className="space-y-2">
                       <div className="flex gap-2">
                         <input type="number" value={incomeAmount} onChange={e => setIncomeAmount(e.target.value)}
@@ -535,6 +536,7 @@ export default function DashboardPage() {
                 </button>
                 {showDriving && (
                   <div className="space-y-3 mt-2">
+                    <p className="text-xs text-slate-400">Kjøring registreres på post 7080</p>
                     <div>
                       <label className="block text-xs text-slate-500 mb-1">Kr per km</label>
                       <input type="number" value={ratePerKm} onChange={e => setRatePerKm(parseFloat(e.target.value))}
@@ -555,7 +557,7 @@ export default function DashboardPage() {
               <div>
                 <button onClick={() => setShowHjemmekontor(!showHjemmekontor)}
                   className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
-                  <span>Hjemmekontor (post 7100)</span>
+                  <span>Hjemmekontor</span>
                   <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
                     {hjemmekontorAmt && parseFloat(hjemmekontorAmt) > 0 && (
                       <span>{parseFloat(hjemmekontorAmt).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
@@ -583,7 +585,7 @@ export default function DashboardPage() {
               <div>
                 <button onClick={() => setShowAvskrivninger(!showAvskrivninger)}
                   className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
-                  <span>Avskrivninger (post 6000)</span>
+                  <span>Avskrivninger</span>
                   <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
                     {avskrivningerAmt && parseFloat(avskrivningerAmt) > 0 && (
                       <span>{parseFloat(avskrivningerAmt).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
@@ -785,26 +787,11 @@ export default function DashboardPage() {
           <p className="text-xs text-blue-200 mt-1">{yearEntries.length} oppføringer</p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex bg-slate-100 rounded-xl p-1">
-          <button onClick={() => setActiveTab('list')}
-            className={`flex-1 text-sm font-medium py-2 rounded-lg transition ${activeTab === 'list' ? 'bg-white shadow text-slate-800' : 'text-slate-500'}`}>
-            Oppføringer
-          </button>
-          <button onClick={() => setActiveTab('report')}
-            className={`flex-1 text-sm font-medium py-2 rounded-lg transition ${activeTab === 'report' ? 'bg-white shadow text-slate-800' : 'text-slate-500'}`}>
-            Årsrapport
-          </button>
-        </div>
-
         {loading ? (
           <div className="text-center text-slate-400 py-12">Laster...</div>
-        ) : activeTab === 'list' ? (
+        ) : (
           <EntryList entries={yearEntries} expandedId={expandedId} setExpandedId={setExpandedId}
             onDelete={handleDelete} onEdit={e => navigate(`/add?edit=${e.id}`)} getAmount={getAmount} />
-        ) : (
-          <TaxReport byCategory={byCategory} total={totalExpenses} year={selectedYear}
-            ratePerKm={ratePerKm} ratePerPassengerKm={ratePerPassengerKm} />
         )}
       </div>
 
@@ -904,46 +891,3 @@ function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit, getAm
   )
 }
 
-function TaxReport({ byCategory, total, year, ratePerKm, ratePerPassengerKm }: {
-  byCategory: { post: string; label: string; sum: number; items: Entry[] }[]
-  total: number
-  year: number
-  ratePerKm: number
-  ratePerPassengerKm: number
-}) {
-  if (byCategory.length === 0) {
-    return (
-      <div className="text-center py-16 text-slate-400">
-        <p className="text-sm">Ingen data for {year} ennå.</p>
-      </div>
-    )
-  }
-  return (
-    <div className="space-y-3">
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-        <p className="text-sm font-semibold text-amber-800">Altinn-sammendrag {year}</p>
-        <p className="text-xs text-amber-600 mt-1">
-          Kjøresats: {ratePerKm} kr/km • Passasjertillegg: {ratePerPassengerKm} kr/passasjer/km
-        </p>
-      </div>
-      {byCategory.map(cat => (
-        <div key={cat.post} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded inline-block">Post {cat.post}</p>
-              <p className="text-sm font-medium text-slate-800 mt-1">{cat.label}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{cat.items.length} oppføring{cat.items.length !== 1 ? 'er' : ''}</p>
-            </div>
-            <p className="text-base font-bold text-slate-800">
-              {cat.sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-            </p>
-          </div>
-        </div>
-      ))}
-      <div className="bg-slate-800 text-white rounded-xl p-4 flex justify-between items-center">
-        <span className="font-semibold">Totale fradrag</span>
-        <span className="text-xl font-bold">{total.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
-      </div>
-    </div>
-  )
-}

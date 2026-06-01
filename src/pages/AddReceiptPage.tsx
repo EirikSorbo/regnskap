@@ -24,7 +24,9 @@ export default function AddReceiptPage() {
   const editId = searchParams.get('edit')
   const isEditing = !!editId
 
-  const [categoryPost, setCategoryPost] = useState(CATEGORIES[0].post)
+  const [categoryPost, setCategoryPost] = useState(
+    searchParams.get('type') === 'driving' ? DRIVING_CATEGORY.post : CATEGORIES[0].post
+  )
   const isDriving = categoryPost === DRIVING_CATEGORY.post
 
   // Receipt fields
