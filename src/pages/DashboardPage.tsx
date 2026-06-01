@@ -799,7 +799,7 @@ export default function DashboardPage() {
                       return (
                         <a key={e.id} href={r.imageUrl} target="_blank" rel="noopener noreferrer"
                           className="flex items-start gap-2 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
-                          <span className="text-lg leading-none mt-0.5">{isPdf ? '📄' : '🖼️'}</span>
+                          <span className="text-xs font-mono text-slate-400 mt-0.5 shrink-0">{isPdf ? 'PDF' : 'IMG'}</span>
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-medium text-blue-600 truncate">{filename}</p>
                             <p className="text-xs text-slate-400">{e.category.label} · {format(new Date(e.date), 'd. MMM yyyy', { locale: nb })}</p>
@@ -835,12 +835,10 @@ export default function DashboardPage() {
         <div className="flex gap-2">
           <button onClick={() => navigate('/add?post=6500')}
             className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
-            <span className="text-base">🎸</span>
             <span>Utstyr</span>
           </button>
           <button onClick={() => navigate('/add?post=6800')}
             className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
-            <span className="text-base">🍽️</span>
             <span>Mat og drikke</span>
           </button>
         </div>
