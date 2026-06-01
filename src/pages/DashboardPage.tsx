@@ -66,6 +66,80 @@ interface IncomeEntry {
   createdAt: number
 }
 
+function BackupModal({ years, downloadingZip, onBackup, onZip, onClose }: {
+  years: number[]
+  downloadingZip: boolean
+  onBackup: (year?: number) => void
+  onZip: (year?: number) => void
+  onClose: () => void
+}) {
+  const [backupYear, setBackupYear] = useState<number | 'alle'>('alle')
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+          <h2 className="text-base font-semibold text-slate-800">Backup &amp; nedlasting</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
+        </div>
+        <div className="px-5 py-5 space-y-5">
+          {/* Year selector */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">År</label>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setBackupYear('alle')}
+                className={`px-3 py-1.5 rounded-lg text-sm border transition ${backupYear === 'alle' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                Alle år
+              </button>
+              {years.map(y => (
+                <button key={y} onClick={() => setBackupYear(y)}
+                  className={`px-3 py-1.5 rounded-lg text-sm border transition ${backupYear === y ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                  {y}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Last ned</p>
+            <button onClick={() => onBackup(backupYear === 'alle' ? undefined : backupYear)}
+              className="w-full flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition text-left">
+              <IconUpload />
+              <div>
+                <p className="text-sm font-medium text-slate-700">Data (JSON)</p>
+                <p className="text-xs text-slate-400">Alle oppføringer og inntekter{backupYear !== 'alle' ? ` for ${backupYear}` : ''}</p>
+              </div>
+            </button>
+            <button onClick={() => onZip(backupYear === 'alle' ? undefined : backupYear)} disabled={downloadingZip}
+              className="w-full flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 disabled:opacity-50 transition text-left">
+              <IconArchive />
+              <div>
+                <p className="text-sm font-medium text-slate-700">{downloadingZip ? 'Laster ned...' : 'Filer (ZIP)'}</p>
+                <p className="text-xs text-slate-400">Alle kvitteringsvedlegg{backupYear !== 'alle' ? ` for ${backupYear}` : ''}</p>
+              </div>
+            </button>
+            <button
+              onClick={async () => {
+                await onBackup(backupYear === 'alle' ? undefined : backupYear)
+                await onZip(backupYear === 'alle' ? undefined : backupYear)
+              }}
+              disabled={downloadingZip}
+              className="w-full flex items-center gap-3 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl px-4 py-3 transition text-left">
+              <IconArchive />
+              <div>
+                <p className="text-sm font-medium">Full backup (JSON + ZIP)</p>
+                <p className="text-xs text-white/60">Data og filer{backupYear !== 'alle' ? ` for ${backupYear}` : ''}</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function EkomModal({ userId, year, onClose }: { userId: string; year: number; onClose: () => void }) {
   const [phoneMonths, setPhoneMonths] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem(EKOM_PHONE_KEY(year)) || 'null') || Array(12).fill(0) } catch { return Array(12).fill(0) }
@@ -206,6 +280,7 @@ export default function DashboardPage() {
   const [showAltinn, setShowAltinn] = useState(false)
   const [showReceiptList, setShowReceiptList] = useState(false)
   const [showDrivingModal, setShowDrivingModal] = useState(false)
+  const [showBackupModal, setShowBackupModal] = useState(false)
   const [importStatus, setImportStatus] = useState('')
   const [downloadingZip, setDownloadingZip] = useState(false)
 
@@ -333,14 +408,15 @@ export default function DashboardPage() {
     setSavingAvskrivninger(false)
   }
 
-  async function handleDownloadZip() {
+  async function handleDownloadZip(yearFilter?: number) {
     if (!user || downloadingZip) return
     setDownloadingZip(true)
     try {
       const snap = await getDocs(collection(db, 'receipts'))
       const withFiles = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
-        .filter(e => e.userId === user.uid && e.imagePath)
+        .filter(e => e.userId === user.uid && e.imagePath &&
+          (!yearFilter || e.date?.startsWith(String(yearFilter))))
       if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
       const zip = new JSZip()
       let added = 0
@@ -363,7 +439,7 @@ export default function DashboardPage() {
       const content = await zip.generateAsync({ type: 'blob' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(content)
-      a.download = 'kvitteringer_alle.zip'
+      a.download = `kvitteringer_${yearFilter ?? 'alle'}.zip`
       a.click()
       URL.revokeObjectURL(a.href)
       if (errors.length > 0) alert(`${added} lastet ned. ${errors.length} feilet:\n${errors.join('\n')}`)
@@ -374,21 +450,23 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleBackup() {
+  async function handleBackup(yearFilter?: number) {
     if (!user) return
     const [receiptSnap, incomeSnap] = await Promise.all([
       getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid))),
       getDocs(query(collection(db, 'income'), where('userId', '==', user.uid))),
     ])
+    const filterFn = (d: { date?: string }) => !yearFilter || d.date?.startsWith(String(yearFilter))
     const data = {
       exportedAt: new Date().toISOString(),
-      receipts: receiptSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-      income: incomeSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      year: yearFilter ?? 'alle',
+      receipts: receiptSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
+      income: incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `regnskap_backup_${format(new Date(), 'yyyy-MM-dd')}.json`
+    a.download = `regnskap_backup_${yearFilter ?? 'alle'}_${format(new Date(), 'yyyy-MM-dd')}.json`
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -656,23 +734,11 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div className="border-t border-slate-100 pt-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Last ned alle</p>
-                <button onClick={handleDownloadZip} disabled={downloadingZip}
-                  className="w-full flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 disabled:opacity-50 transition">
-                  <IconArchive />
-                  <span>{downloadingZip ? 'Laster ned...' : 'Last ned alle kvitteringer (ZIP)'}</span>
+                <button onClick={() => setShowBackupModal(true)}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition">
+                  <span>Backup &amp; nedlasting</span>
+                  <span className="text-slate-400 text-base">→</span>
                 </button>
-
-              </div>
-              <div className="border-t border-slate-100 pt-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Backup</p>
-                <div className="space-y-2">
-                  <button onClick={handleBackup}
-                    className="w-full flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
-                    <IconUpload />
-                    <span>Last ned backup (JSON)</span>
-                  </button>
-                </div>
               </div>
               <div className="border-t border-slate-100 pt-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Import</p>
@@ -695,6 +761,17 @@ export default function DashboardPage() {
 
       {showEkomModal && user && (
         <EkomModal userId={user.uid} year={selectedYear} onClose={() => setShowEkomModal(false)} />
+      )}
+
+      {/* Backup modal */}
+      {showBackupModal && (
+        <BackupModal
+          years={years}
+          downloadingZip={downloadingZip}
+          onBackup={handleBackup}
+          onZip={handleDownloadZip}
+          onClose={() => setShowBackupModal(false)}
+        />
       )}
 
       {/* Driving overview modal */}
