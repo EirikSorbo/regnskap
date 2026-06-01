@@ -33,9 +33,9 @@ export default function AddReceiptPage() {
   const [existingImagePath, setExistingImagePath] = useState('')
 
   // Driving fields
-  const [from, setFrom] = useState('')
+  const [from, setFrom] = useState('Hjemme')
   const [to, setTo] = useState('')
-  const [tripType, setTripType] = useState<'one-way' | 'return'>('one-way')
+  const [tripType, setTripType] = useState<'one-way' | 'return'>('return')
   const [distance, setDistance] = useState('')
   const [passengers, setPassengers] = useState('')
 
@@ -154,7 +154,7 @@ export default function AddReceiptPage() {
             onChange={e => setCategoryPost(e.target.value)}
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
-            {CATEGORIES.map(c => (
+            {CATEGORIES.filter(c => !['7500', '7100'].includes(c.post) || ['7500', '7100'].includes(categoryPost)).map(c => (
               <option key={c.post} value={c.post}>Post {c.post} – {c.label}</option>
             ))}
           </select>

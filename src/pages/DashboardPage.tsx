@@ -19,7 +19,7 @@ function IconPlus() {
 }
 
 import { useState, useEffect } from 'react'
-import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc } from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
@@ -32,6 +32,15 @@ import { signOut } from 'firebase/auth'
 const RATE_KEY = 'driving_rate_per_km'
 const RATE_PASS_KEY = 'driving_rate_per_passenger_km'
 const YEAR_KEY = 'selected_year'
+const EKOM_PHONE_KEY = (y: number) => `ekom_phone_${y}`
+const EKOM_INTERNET_KEY = (y: number) => `ekom_internet_${y}`
+const EKOM_PRIVATE_PCT_KEY = 'ekom_private_pct'
+const EKOM_ID_KEY = (y: number) => `ekom_entry_id_${y}`
+const HK_AMOUNT_KEY = (y: number) => `hjemmekontor_amount_${y}`
+const HK_ID_KEY = (y: number) => `hjemmekontor_entry_id_${y}`
+
+const MONTHS = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
+const QUARTERS = ['Q1 (jan–mar)', 'Q2 (apr–jun)', 'Q3 (jul–sep)', 'Q4 (okt–des)']
 
 interface IncomeEntry {
   id?: string
@@ -40,6 +49,118 @@ interface IncomeEntry {
   date: string
   description: string
   createdAt: number
+}
+
+function EkomModal({ userId, year, onClose }: { userId: string; year: number; onClose: () => void }) {
+  const [phoneMonths, setPhoneMonths] = useState<number[]>(() => {
+    try { return JSON.parse(localStorage.getItem(EKOM_PHONE_KEY(year)) || 'null') || Array(12).fill(0) } catch { return Array(12).fill(0) }
+  })
+  const [internetQuarters, setInternetQuarters] = useState<number[]>(() => {
+    try { return JSON.parse(localStorage.getItem(EKOM_INTERNET_KEY(year)) || 'null') || Array(4).fill(0) } catch { return Array(4).fill(0) }
+  })
+  const [privatePct, setPrivatePct] = useState(() => parseFloat(localStorage.getItem(EKOM_PRIVATE_PCT_KEY) || '50'))
+  const [saving, setSaving] = useState(false)
+
+  const totalPhone = phoneMonths.reduce((s, v) => s + (Number(v) || 0), 0)
+  const totalInternet = internetQuarters.reduce((s, v) => s + (Number(v) || 0), 0)
+  const totalGross = totalPhone + totalInternet
+  const deductionAmount = totalGross * (privatePct / 100)
+  const netAmount = Math.round((totalGross - deductionAmount) * 100) / 100
+
+  function updatePhone(i: number, val: string) {
+    const next = [...phoneMonths]; next[i] = parseFloat(val) || 0; setPhoneMonths(next)
+  }
+  function updateInternet(i: number, val: string) {
+    const next = [...internetQuarters]; next[i] = parseFloat(val) || 0; setInternetQuarters(next)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    localStorage.setItem(EKOM_PHONE_KEY(year), JSON.stringify(phoneMonths))
+    localStorage.setItem(EKOM_INTERNET_KEY(year), JSON.stringify(internetQuarters))
+    localStorage.setItem(EKOM_PRIVATE_PCT_KEY, String(privatePct))
+    const category = CATEGORIES.find(c => c.post === '7500')!
+    const updateData = { amount: netAmount, category, description: 'EKOM-beregning (automatisk)' }
+    const existingId = localStorage.getItem(EKOM_ID_KEY(year))
+    if (existingId) {
+      try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
+      catch {
+        const d = await addDoc(collection(db, 'receipts'), { userId, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${year}-12-31`, createdAt: Date.now(), ...updateData })
+        localStorage.setItem(EKOM_ID_KEY(year), d.id)
+      }
+    } else {
+      const d = await addDoc(collection(db, 'receipts'), { userId, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${year}-12-31`, createdAt: Date.now(), ...updateData })
+      localStorage.setItem(EKOM_ID_KEY(year), d.id)
+    }
+    setSaving(false)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+          <h2 className="text-base font-semibold text-slate-800">EKOM-kalkulator {year}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          <div>
+            <p className="text-sm font-semibold text-slate-700 mb-3">Telefon — månedlige utgifter</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              {MONTHS.map((m, i) => (
+                <div key={m} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 w-8 shrink-0">{m.slice(0, 3)}</span>
+                  <input type="number" value={phoneMonths[i] || ''} onChange={e => updatePhone(i, e.target.value)}
+                    min="0" step="1" placeholder="0"
+                    className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-400 mt-2">Sum: {totalPhone.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-700 mb-3">Internett — kvartalsvise utgifter</p>
+            <div className="space-y-2">
+              {QUARTERS.map((q, i) => (
+                <div key={q} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 w-24 shrink-0">{q}</span>
+                  <input type="number" value={internetQuarters[i] || ''} onChange={e => updateInternet(i, e.target.value)}
+                    min="0" step="1" placeholder="0"
+                    className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-400 mt-2">Sum: {totalInternet.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Privat bruksfradrag (%)</label>
+            <div className="flex items-center gap-3">
+              <input type="range" min="0" max="100" step="5" value={privatePct}
+                onChange={e => setPrivatePct(Number(e.target.value))} className="flex-1" />
+              <span className="text-sm font-medium w-10 text-right">{privatePct}%</span>
+            </div>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-1.5 text-sm">
+            <p className="font-semibold text-slate-700 mb-2">Oppsummering</p>
+            <div className="flex justify-between text-slate-600"><span>Telefon totalt</span><span>{totalPhone.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
+            <div className="flex justify-between text-slate-600"><span>Internett totalt</span><span>{totalInternet.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
+            <div className="flex justify-between text-slate-400 text-xs"><span>Brutto</span><span>{totalGross.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
+            <div className="flex justify-between text-red-500 text-xs"><span>− Privat {privatePct}%</span><span>−{deductionAmount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
+            <div className="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-1.5">
+              <span>Post 7500 fradrag</span><span>{netAmount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+            </div>
+          </div>
+        </div>
+        <div className="px-5 pb-5 pt-3 border-t border-slate-100 shrink-0">
+          <button onClick={handleSave} disabled={saving}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 rounded-xl transition text-sm">
+            {saving ? 'Lagrer...' : 'Lagre EKOM-beregning'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function DashboardPage() {
@@ -54,7 +175,10 @@ export default function DashboardPage() {
   const [ratePerKm, setRatePerKm] = useState(() => parseFloat(localStorage.getItem(RATE_KEY) || '3.50'))
   const [ratePerPassengerKm, setRatePerPassengerKm] = useState(() => parseFloat(localStorage.getItem(RATE_PASS_KEY) || '1.00'))
   const [showSettings, setShowSettings] = useState(false)
+  const [showEkomModal, setShowEkomModal] = useState(false)
   const [showIncome, setShowIncome] = useState(false)
+  const [hjemmekontorAmt, setHjemmekontorAmt] = useState('')
+  const [savingHjemmekontor, setSavingHjemmekontor] = useState(false)
 
   // Income form
   const [incomeAmount, setIncomeAmount] = useState('')
@@ -65,6 +189,9 @@ export default function DashboardPage() {
   useEffect(() => { localStorage.setItem(RATE_KEY, String(ratePerKm)) }, [ratePerKm])
   useEffect(() => { localStorage.setItem(RATE_PASS_KEY, String(ratePerPassengerKm)) }, [ratePerPassengerKm])
   useEffect(() => { localStorage.setItem(YEAR_KEY, String(selectedYear)) }, [selectedYear])
+  useEffect(() => {
+    setHjemmekontorAmt(localStorage.getItem(HK_AMOUNT_KEY(selectedYear)) || '')
+  }, [selectedYear])
 
   useEffect(() => {
     if (!user) return
@@ -144,6 +271,29 @@ export default function DashboardPage() {
     try { await deleteDoc(doc(db, 'income', entry.id)) } catch (e) { console.error(e) }
   }
 
+  async function handleSaveHjemmekontor() {
+    if (!user) return
+    setSavingHjemmekontor(true)
+    const amount = parseFloat(hjemmekontorAmt) || 0
+    localStorage.setItem(HK_AMOUNT_KEY(selectedYear), String(amount))
+    const category = CATEGORIES.find(c => c.post === '7100')!
+    const updateData = { amount, category, description: 'Hjemmekontor fradrag' }
+    const existingId = localStorage.getItem(HK_ID_KEY(selectedYear))
+    if (existingId) {
+      try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
+      catch {
+        if (amount > 0) {
+          const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
+          localStorage.setItem(HK_ID_KEY(selectedYear), d.id)
+        }
+      }
+    } else if (amount > 0) {
+      const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
+      localStorage.setItem(HK_ID_KEY(selectedYear), d.id)
+    }
+    setSavingHjemmekontor(false)
+  }
+
   const years = Array.from(new Set([
     ...entries.map(e => parseInt(e.date.slice(0, 4))),
     ...incomeEntries.map(e => parseInt(e.date.slice(0, 4))),
@@ -179,6 +329,7 @@ export default function DashboardPage() {
               <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+
               {/* Year */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Regnskapsår</label>
@@ -186,6 +337,57 @@ export default function DashboardPage() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {years.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
+              </div>
+
+              {/* Income */}
+              <div>
+                <button onClick={() => setShowIncome(!showIncome)}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
+                  <span>Inntekter {selectedYear}</span>
+                  <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
+                    {totalIncome > 0 && <span>{totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>}
+                    <IconChevron open={showIncome} />
+                  </span>
+                </button>
+                {showIncome && (
+                  <div className="space-y-2 mt-2">
+                    <form onSubmit={handleAddIncome} className="space-y-2">
+                      <div className="flex gap-2">
+                        <input type="number" value={incomeAmount} onChange={e => setIncomeAmount(e.target.value)}
+                          min="0" step="0.01" placeholder="Beløp" required
+                          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="date" value={incomeDate} onChange={e => setIncomeDate(e.target.value)} required
+                          className="border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div className="flex gap-2">
+                        <input type="text" value={incomeDesc} onChange={e => setIncomeDesc(e.target.value)}
+                          placeholder="Beskrivelse"
+                          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <button type="submit" disabled={savingIncome}
+                          className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm px-3 py-2 rounded-lg transition whitespace-nowrap">
+                          Legg til
+                        </button>
+                      </div>
+                    </form>
+                    {yearIncome.length > 0 && (
+                      <div className="space-y-1 pt-1 border-t border-slate-100">
+                        {yearIncome.map(inc => (
+                          <div key={inc.id} className="flex items-center justify-between text-xs py-1">
+                            <div className="text-slate-600 flex-1 min-w-0">
+                              <span className="font-medium">{inc.amount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+                              {inc.description && <span className="text-slate-400 ml-1">{inc.description}</span>}
+                              <span className="text-slate-300 ml-1">{format(new Date(inc.date), 'd. MMM', { locale: nb })}</span>
+                            </div>
+                            <button onClick={() => handleDeleteIncome(inc)} className="text-slate-300 hover:text-red-400 ml-2 shrink-0"><IconTrash /></button>
+                          </div>
+                        ))}
+                        <p className="text-xs font-semibold text-slate-700 pt-1 border-t border-slate-100">
+                          Total: {totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Driving rates */}
@@ -207,6 +409,34 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* EKOM */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">EKOM (Telefon & internett)</label>
+                <button onClick={() => { setShowSettings(false); setShowEkomModal(true) }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 text-left transition flex items-center justify-between">
+                  <span>Åpne EKOM-kalkulator for {selectedYear}</span>
+                  <span className="text-slate-400">→</span>
+                </button>
+                {localStorage.getItem(EKOM_ID_KEY(selectedYear)) && (
+                  <p className="text-xs text-green-600 mt-1">Beregning lagret for {selectedYear}</p>
+                )}
+              </div>
+
+              {/* Hjemmekontor */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Hjemmekontor</label>
+                <p className="text-xs text-slate-400 mb-2">Årsbeløp registreres på post 7100</p>
+                <div className="flex gap-2">
+                  <input type="number" value={hjemmekontorAmt} onChange={e => setHjemmekontorAmt(e.target.value)}
+                    min="0" step="1" placeholder="0"
+                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <button onClick={handleSaveHjemmekontor} disabled={savingHjemmekontor}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
+                    {savingHjemmekontor ? '...' : 'Lagre'}
+                  </button>
+                </div>
+              </div>
+
               <div className="border-t border-slate-100 pt-4">
                 <button onClick={() => signOut(auth)}
                   className="w-full text-sm text-red-500 border border-red-200 rounded-lg py-2 hover:bg-red-50 transition">
@@ -218,6 +448,10 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {showEkomModal && user && (
+        <EkomModal userId={user.uid} year={selectedYear} onClose={() => setShowEkomModal(false)} />
+      )}
+
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
 
         {/* Summary card */}
@@ -225,63 +459,6 @@ export default function DashboardPage() {
           <p className="text-sm text-blue-100">Totale utgifter {selectedYear}</p>
           <p className="text-3xl font-bold mt-1">{totalExpenses.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
           <p className="text-xs text-blue-200 mt-1">{yearEntries.length} oppføringer</p>
-        </div>
-
-        {/* Income — subtle collapsible */}
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm">
-          <button onClick={() => setShowIncome(!showIncome)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-500 hover:text-slate-700 transition">
-            <span>Inntekter {selectedYear}</span>
-            <span className="text-xs text-slate-400 flex items-center gap-1">
-              {totalIncome > 0 && <span>{totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>}
-              <IconChevron open={showIncome} />
-            </span>
-          </button>
-          {showIncome && (
-            <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-3">
-              <form onSubmit={handleAddIncome} className="space-y-2">
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs text-slate-500 mb-1">Beløp (kr)</label>
-                    <input type="number" value={incomeAmount} onChange={e => setIncomeAmount(e.target.value)}
-                      min="0" step="0.01" placeholder="0.00" required
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Dato</label>
-                    <input type="date" value={incomeDate} onChange={e => setIncomeDate(e.target.value)} required
-                      className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <input type="text" value={incomeDesc} onChange={e => setIncomeDesc(e.target.value)}
-                    placeholder="Beskrivelse (valgfritt)"
-                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <button type="submit" disabled={savingIncome}
-                    className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
-                    Legg til
-                  </button>
-                </div>
-              </form>
-              {yearIncome.length > 0 && (
-                <div className="space-y-1 pt-1 border-t border-slate-50">
-                  {yearIncome.map(inc => (
-                    <div key={inc.id} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 last:border-0">
-                      <div className="text-slate-600">
-                        <span className="font-medium">{inc.amount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
-                        {inc.description && <span className="text-slate-400 ml-2">{inc.description}</span>}
-                        <span className="text-slate-300 ml-2">{format(new Date(inc.date), 'd. MMM', { locale: nb })}</span>
-                      </div>
-                      <button onClick={() => handleDeleteIncome(inc)} className="text-slate-300 hover:text-red-400 ml-3">✕</button>
-                    </div>
-                  ))}
-                  <p className="text-xs font-semibold text-slate-700 pt-1">
-                    Total: {totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Tabs */}

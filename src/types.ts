@@ -44,6 +44,7 @@ export const CATEGORIES: Category[] = [
   { post: '6695', label: 'Reparasjoner' },
   { post: '6000', label: 'Avskrivninger (saldometoden 30%)' },
   { post: '6590', label: 'Leie av lokale / utstyr' },
+  { post: '7100', label: 'Hjemmekontor' },
   { post: '7700', label: 'Annen driftskostnad' },
 ]
 
