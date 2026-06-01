@@ -109,7 +109,7 @@ function BackupModal({ years, downloadingZip, onBackup, onZip, onClose }: {
               <IconUpload />
               <div>
                 <p className="text-sm font-medium text-slate-700">Data (JSON)</p>
-                <p className="text-xs text-slate-400">Alle oppføringer og inntekter{backupYear !== 'alle' ? ` for ${backupYear}` : ''}</p>
+                <p className="text-xs text-slate-400">Alle oppføringer og inntekter{backupYear !== 'alle' ? ` for ${backupYear}` : ' + innstillinger'}</p>
               </div>
             </button>
             <button onClick={() => onZip(backupYear === 'alle' ? undefined : backupYear)} disabled={downloadingZip}
@@ -412,10 +412,10 @@ export default function DashboardPage() {
     if (!user || downloadingZip) return
     setDownloadingZip(true)
     try {
-      const snap = await getDocs(collection(db, 'receipts'))
+      const snap = await getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid)))
       const withFiles = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
-        .filter(e => e.userId === user.uid && e.imagePath &&
+        .filter(e => e.imagePath &&
           (!yearFilter || e.date?.startsWith(String(yearFilter))))
       if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
       const zip = new JSZip()
@@ -450,6 +450,23 @@ export default function DashboardPage() {
     }
   }
 
+  function exportLocalSettings(): Record<string, string> {
+    const keys = [
+      RATE_KEY, RATE_PASS_KEY, EKOM_PRIVATE_AMT_KEY,
+      ...years.flatMap(y => [
+        EKOM_PHONE_KEY(y), EKOM_INTERNET_KEY(y), EKOM_ID_KEY(y),
+        HK_AMOUNT_KEY(y), HK_ID_KEY(y),
+        AV_AMOUNT_KEY(y), AV_ID_KEY(y),
+      ]),
+    ]
+    const result: Record<string, string> = {}
+    for (const k of keys) {
+      const v = localStorage.getItem(k)
+      if (v !== null) result[k] = v
+    }
+    return result
+  }
+
   async function handleBackup(yearFilter?: number) {
     if (!user) return
     const [receiptSnap, incomeSnap] = await Promise.all([
@@ -462,6 +479,7 @@ export default function DashboardPage() {
       year: yearFilter ?? 'alle',
       receipts: receiptSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
       income: incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
+      settings: yearFilter ? undefined : exportLocalSettings(),
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
@@ -479,21 +497,40 @@ export default function DashboardPage() {
       const text = await file.text()
       const data = JSON.parse(text)
       if (!data.receipts || !data.income) { setImportStatus('Ugyldig backup-fil.'); return }
+      setImportStatus('Sjekker duplikater...')
+      // Fetch existing IDs to avoid duplicates
+      const [existingReceipts, existingIncome] = await Promise.all([
+        getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid))),
+        getDocs(query(collection(db, 'income'), where('userId', '==', user.uid))),
+      ])
+      const existingReceiptIds = new Set(existingReceipts.docs.map(d => d.id))
+      const existingIncomeIds = new Set(existingIncome.docs.map(d => d.id))
       setImportStatus('Importerer...')
       let count = 0
+      let skipped = 0
       for (const r of data.receipts) {
-        const { id: _id, ...fields } = r
+        const { id, ...fields } = r
         if (fields.userId !== user.uid) continue
+        if (id && existingReceiptIds.has(id)) { skipped++; continue }
         await addDoc(collection(db, 'receipts'), fields)
         count++
       }
       for (const inc of data.income) {
-        const { id: _id, ...fields } = inc
+        const { id, ...fields } = inc
         if (fields.userId !== user.uid) continue
+        if (id && existingIncomeIds.has(id)) { skipped++; continue }
         await addDoc(collection(db, 'income'), fields)
         count++
       }
-      setImportStatus(`✓ ${count} oppføringer importert.`)
+      // Restore localStorage settings if present (only if not overwriting existing)
+      if (data.settings && typeof data.settings === 'object') {
+        let settingsRestored = 0
+        for (const [k, v] of Object.entries(data.settings)) {
+          if (typeof v === 'string') { localStorage.setItem(k, v); settingsRestored++ }
+        }
+        if (settingsRestored > 0) window.location.reload()
+      }
+      setImportStatus(`✓ ${count} importert${skipped > 0 ? `, ${skipped} duplikater hoppet over` : ''}.`)
     } catch (err) {
       setImportStatus('Feil: ' + (err instanceof Error ? err.message : String(err)))
     }
