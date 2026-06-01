@@ -1,0 +1,7 @@
+[
+  {
+    "origin": ["https://eiriksorbo.github.io", "http://localhost:5173"],
+    "method": ["GET", "HEAD"],
+    "maxAgeSeconds": 3600
+  }
+]

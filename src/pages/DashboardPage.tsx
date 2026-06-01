@@ -26,9 +26,8 @@ function IconUpload() {
 
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc, getDocs } from 'firebase/firestore'
-import { ref, deleteObject, getBlob, getDownloadURL } from 'firebase/storage'
+import { ref, deleteObject } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
-import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
 import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount } from '../types'
 import { useNavigate } from 'react-router-dom'
@@ -194,7 +193,6 @@ export default function DashboardPage() {
   const [incomeAmount, setIncomeAmount] = useState('')
   const [incomeDate, setIncomeDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [savingIncome, setSavingIncome] = useState(false)
-  const [downloadingZip, setDownloadingZip] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
   const [importStatus, setImportStatus] = useState('')
 
@@ -328,67 +326,6 @@ export default function DashboardPage() {
     setSavingAvskrivninger(false)
   }
 
-  async function handleDownloadReceipts() {
-    if (!user || downloadingZip) return
-    setDownloadingZip(true)
-    try {
-      const snap = await getDocs(collection(db, 'receipts'))
-      const withFiles = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
-        .filter(e => e.userId === user.uid && (e.imagePath || e.imageUrl))
-      if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); setDownloadingZip(false); return }
-
-      const zip = new JSZip()
-      let added = 0
-      const errors: string[] = []
-
-      for (const e of withFiles) {
-        const name = e.imagePath?.split('/').pop() ?? `${e.id}`
-        try {
-          // Try getBlob first (SDK, no CORS), fall back to fetch via download URL
-          let blob: Blob
-          try {
-            const storageRef = ref(storage, e.imagePath)
-            blob = await Promise.race([
-              getBlob(storageRef),
-              new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000))
-            ])
-          } catch {
-            // Fall back: get a fresh download URL and fetch it
-            const url = e.imageUrl || await getDownloadURL(ref(storage, e.imagePath))
-            const resp = await Promise.race([
-              fetch(url),
-              new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000))
-            ])
-            blob = await resp.blob()
-          }
-          zip.file(name, blob)
-          added++
-        } catch (err) {
-          console.warn('Feil for', name, err)
-          errors.push(name)
-        }
-      }
-
-      if (added === 0) {
-        alert(`Ingen filer kunne lastes ned.\n\nFeil:\n${errors.join('\n')}`)
-        return
-      }
-      const content = await zip.generateAsync({ type: 'blob' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(content)
-      a.download = `kvitteringer_alle.zip`
-      a.click()
-      URL.revokeObjectURL(a.href)
-      if (errors.length > 0) alert(`${added} filer lastet ned.\n${errors.length} feilet:\n${errors.join('\n')}`)
-    } catch (err) {
-      console.error(err)
-      alert('Feil: ' + (err instanceof Error ? err.message : String(err)))
-    } finally {
-      setDownloadingZip(false)
-    }
-  }
-
   async function handleBackup() {
     if (!user) return
     const [receiptSnap, incomeSnap] = await Promise.all([
@@ -451,7 +388,7 @@ export default function DashboardPage() {
             <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.06</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.07</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -616,13 +553,36 @@ export default function DashboardPage() {
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Eksport</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Kvitteringer</p>
+                {(() => {
+                  const files = entries
+                    .filter(e => e.entryType === 'receipt' && (e as ReceiptEntry).imageUrl)
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                  if (files.length === 0) return <p className="text-xs text-slate-400">Ingen vedlegg lastet opp.</p>
+                  return (
+                    <div className="space-y-2">
+                      {files.map(e => {
+                        const r = e as ReceiptEntry
+                        const filename = r.imagePath?.split('/').pop() ?? 'vedlegg'
+                        const isPdf = filename.toLowerCase().endsWith('.pdf') || r.imageUrl?.includes('.pdf')
+                        return (
+                          <a key={e.id} href={r.imageUrl} target="_blank" rel="noopener noreferrer"
+                            className="flex items-start gap-2 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
+                            <span className="text-lg leading-none mt-0.5">{isPdf ? '📄' : '🖼️'}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium text-blue-600 truncate">{filename}</p>
+                              <p className="text-xs text-slate-400">{e.category.label} · {format(new Date(e.date), 'd. MMM yyyy', { locale: nb })}</p>
+                            </div>
+                          </a>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Backup</p>
                 <div className="space-y-2">
-                  <button onClick={handleDownloadReceipts} disabled={downloadingZip}
-                    className="w-full flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 disabled:opacity-50 transition">
-                    <IconArchive />
-                    <span>{downloadingZip ? 'Laster ned...' : 'Last ned kvitteringer (ZIP)'}</span>
-                  </button>
                   <button onClick={handleBackup}
                     className="w-full flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
                     <IconUpload />
