@@ -26,8 +26,9 @@ function IconUpload() {
 
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc, getDocs } from 'firebase/firestore'
-import { ref, deleteObject } from 'firebase/storage'
+import { ref, deleteObject, getBlob } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
+import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
 import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount } from '../types'
 import { useNavigate } from 'react-router-dom'
@@ -195,6 +196,7 @@ export default function DashboardPage() {
   const [savingIncome, setSavingIncome] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
   const [importStatus, setImportStatus] = useState('')
+  const [downloadingZip, setDownloadingZip] = useState(false)
 
   useEffect(() => { localStorage.setItem(RATE_KEY, String(ratePerKm)) }, [ratePerKm])
   useEffect(() => { localStorage.setItem(RATE_PASS_KEY, String(ratePerPassengerKm)) }, [ratePerPassengerKm])
@@ -326,6 +328,47 @@ export default function DashboardPage() {
     setSavingAvskrivninger(false)
   }
 
+  async function handleDownloadZip() {
+    if (!user || downloadingZip) return
+    setDownloadingZip(true)
+    try {
+      const snap = await getDocs(collection(db, 'receipts'))
+      const withFiles = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
+        .filter(e => e.userId === user.uid && e.imagePath)
+      if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
+      const zip = new JSZip()
+      let added = 0
+      const errors: string[] = []
+      for (const e of withFiles) {
+        const name = e.imagePath.split('/').pop()!
+        try {
+          const blob = await Promise.race([
+            getBlob(ref(storage, e.imagePath)),
+            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+          ])
+          zip.file(name, blob)
+          added++
+        } catch (err) {
+          console.warn('Feil:', name, err)
+          errors.push(name)
+        }
+      }
+      if (added === 0) { alert(`Ingen filer lastet ned.\n\nFeil:\n${errors.join('\n')}`); return }
+      const content = await zip.generateAsync({ type: 'blob' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(content)
+      a.download = 'kvitteringer_alle.zip'
+      a.click()
+      URL.revokeObjectURL(a.href)
+      if (errors.length > 0) alert(`${added} lastet ned. ${errors.length} feilet:\n${errors.join('\n')}`)
+    } catch (err) {
+      alert('Feil: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setDownloadingZip(false)
+    }
+  }
+
   async function handleBackup() {
     if (!user) return
     const [receiptSnap, incomeSnap] = await Promise.all([
@@ -388,7 +431,7 @@ export default function DashboardPage() {
             <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.07</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.08</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -579,6 +622,17 @@ export default function DashboardPage() {
                     </div>
                   )
                 })()}
+              </div>
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Last ned alle</p>
+                <button onClick={handleDownloadZip} disabled={downloadingZip}
+                  className="w-full flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 disabled:opacity-50 transition">
+                  <IconArchive />
+                  <span>{downloadingZip ? 'Laster ned...' : 'Last ned alle kvitteringer (ZIP)'}</span>
+                </button>
+                <p className="text-xs text-amber-500 mt-2">⚠ Krever CORS-konfigurasjon på storage-bucket. Kjør én gang i terminal:<br/>
+                  <code className="text-xs bg-slate-100 rounded px-1 select-all">gsutil cors set cors.json gs://regnskap-a355e.firebasestorage.app</code>
+                </p>
               </div>
               <div className="border-t border-slate-100 pt-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Backup</p>
