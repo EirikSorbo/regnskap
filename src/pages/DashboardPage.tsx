@@ -185,6 +185,7 @@ export default function DashboardPage() {
   const [incomeDate, setIncomeDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [incomeDesc, setIncomeDesc] = useState('')
   const [savingIncome, setSavingIncome] = useState(false)
+  const [downloadingZip, setDownloadingZip] = useState(false)
 
   useEffect(() => { localStorage.setItem(RATE_KEY, String(ratePerKm)) }, [ratePerKm])
   useEffect(() => { localStorage.setItem(RATE_PASS_KEY, String(ratePerPassengerKm)) }, [ratePerPassengerKm])
@@ -295,30 +296,46 @@ export default function DashboardPage() {
   }
 
   async function handleDownloadReceipts() {
-    if (!user) return
-    const snap = await getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid)))
-    const withFiles = snap.docs
-      .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
-      .filter(e => e.imagePath)
-    if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
-    const zip = new JSZip()
-    let added = 0
-    await Promise.all(withFiles.map(async (e) => {
-      try {
-        const storageRef = ref(storage, e.imagePath)
-        const blob = await getBlob(storageRef)
-        const name = e.imagePath.split('/').pop()!
-        zip.file(name, blob)
-        added++
-      } catch (err) { console.warn('Kunne ikke hente', e.imagePath, err) }
-    }))
-    if (added === 0) { alert('Ingen filer kunne lastes ned. Sjekk konsollen for detaljer.'); return }
-    const content = await zip.generateAsync({ type: 'blob' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(content)
-    a.download = `kvitteringer_${selectedYear}.zip`
-    a.click()
-    URL.revokeObjectURL(a.href)
+    if (!user || downloadingZip) return
+    setDownloadingZip(true)
+    try {
+      const snap = await getDocs(collection(db, 'receipts'))
+      const withFiles = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string })
+        ).filter(e => e.userId === user.uid && e.imagePath)
+      if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
+      const zip = new JSZip()
+      let added = 0
+      const errors: string[] = []
+      await Promise.all(withFiles.map(async (e) => {
+        try {
+          const storageRef = ref(storage, e.imagePath)
+          const blob = await getBlob(storageRef)
+          const name = e.imagePath.split('/').pop()!
+          zip.file(name, blob)
+          added++
+        } catch (err) {
+          console.warn('Kunne ikke hente', e.imagePath, err)
+          errors.push(e.imagePath)
+        }
+      }))
+      if (added === 0) {
+        alert(`Ingen filer kunne lastes ned.\n\nFeil:\n${errors.join('\n')}`)
+        return
+      }
+      const content = await zip.generateAsync({ type: 'blob' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(content)
+      a.download = `kvitteringer_alle.zip`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      if (errors.length > 0) alert(`${added} filer lastet ned.\n${errors.length} feilet:\n${errors.join('\n')}`)
+    } catch (err) {
+      console.error(err)
+      alert('Feil ved nedlasting: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setDownloadingZip(false)
+    }
   }
 
   async function handleBackup() {
@@ -480,9 +497,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="border-t border-slate-100 pt-4 space-y-2">
-                <button onClick={handleDownloadReceipts}
-                  className="w-full text-sm text-slate-700 border border-slate-200 rounded-lg py-2 hover:bg-slate-50 transition">
-                  Last ned alle kvitteringer (ZIP)
+                <button onClick={handleDownloadReceipts} disabled={downloadingZip}
+                  className="w-full text-sm text-slate-700 border border-slate-200 rounded-lg py-2 hover:bg-slate-50 disabled:opacity-50 transition">
+                  {downloadingZip ? 'Laster ned...' : 'Last ned alle kvitteringer (ZIP)'}
                 </button>
                 <button onClick={handleBackup}
                   className="w-full text-sm text-slate-700 border border-slate-200 rounded-lg py-2 hover:bg-slate-50 transition">
