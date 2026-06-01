@@ -35,7 +35,7 @@ const RATE_PASS_KEY = 'driving_rate_per_passenger_km'
 const YEAR_KEY = 'selected_year'
 const EKOM_PHONE_KEY = (y: number) => `ekom_phone_${y}`
 const EKOM_INTERNET_KEY = (y: number) => `ekom_internet_${y}`
-const EKOM_PRIVATE_PCT_KEY = 'ekom_private_pct'
+const EKOM_PRIVATE_AMT_KEY = 'ekom_private_amt'
 const EKOM_ID_KEY = (y: number) => `ekom_entry_id_${y}`
 const HK_AMOUNT_KEY = (y: number) => `hjemmekontor_amount_${y}`
 const HK_ID_KEY = (y: number) => `hjemmekontor_entry_id_${y}`
@@ -59,13 +59,13 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
   const [internetQuarters, setInternetQuarters] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem(EKOM_INTERNET_KEY(year)) || 'null') || Array(4).fill(0) } catch { return Array(4).fill(0) }
   })
-  const [privatePct, setPrivatePct] = useState(() => parseFloat(localStorage.getItem(EKOM_PRIVATE_PCT_KEY) || '50'))
+  const [privateAmt, setPrivateAmt] = useState(() => parseFloat(localStorage.getItem(EKOM_PRIVATE_AMT_KEY) || '0'))
   const [saving, setSaving] = useState(false)
 
   const totalPhone = phoneMonths.reduce((s, v) => s + (Number(v) || 0), 0)
   const totalInternet = internetQuarters.reduce((s, v) => s + (Number(v) || 0), 0)
   const totalGross = totalPhone + totalInternet
-  const deductionAmount = totalGross * (privatePct / 100)
+  const deductionAmount = Math.min(parseFloat(String(privateAmt)) || 0, totalGross)
   const netAmount = Math.round((totalGross - deductionAmount) * 100) / 100
 
   function updatePhone(i: number, val: string) {
@@ -79,7 +79,7 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
     setSaving(true)
     localStorage.setItem(EKOM_PHONE_KEY(year), JSON.stringify(phoneMonths))
     localStorage.setItem(EKOM_INTERNET_KEY(year), JSON.stringify(internetQuarters))
-    localStorage.setItem(EKOM_PRIVATE_PCT_KEY, String(privatePct))
+    localStorage.setItem(EKOM_PRIVATE_AMT_KEY, String(privateAmt))
     const category = CATEGORIES.find(c => c.post === '7500')!
     const updateData = { amount: netAmount, category, description: 'EKOM-beregning (automatisk)' }
     const existingId = localStorage.getItem(EKOM_ID_KEY(year))
@@ -135,19 +135,18 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
             <p className="text-xs text-slate-400 mt-2">Sum: {totalInternet.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Privat bruksfradrag (%)</label>
-            <div className="flex items-center gap-3">
-              <input type="range" min="0" max="100" step="5" value={privatePct}
-                onChange={e => setPrivatePct(Number(e.target.value))} className="flex-1" />
-              <span className="text-sm font-medium w-10 text-right">{privatePct}%</span>
-            </div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Privat bruksfradrag (kr)</label>
+            <p className="text-xs text-slate-400 mb-2">Beløp som trekkes fra som privat bruk</p>
+            <input type="number" value={privateAmt || ''} onChange={e => setPrivateAmt(parseFloat(e.target.value) || 0)}
+              inputMode="decimal" min="0" step="1" placeholder="0"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-1.5 text-sm">
             <p className="font-semibold text-slate-700 mb-2">Oppsummering</p>
             <div className="flex justify-between text-slate-600"><span>Telefon totalt</span><span>{totalPhone.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
             <div className="flex justify-between text-slate-600"><span>Internett totalt</span><span>{totalInternet.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
             <div className="flex justify-between text-slate-400 text-xs"><span>Brutto</span><span>{totalGross.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
-            <div className="flex justify-between text-red-500 text-xs"><span>− Privat {privatePct}%</span><span>−{deductionAmount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
+            <div className="flex justify-between text-red-500 text-xs"><span>− Privat bruk</span><span>−{deductionAmount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span></div>
             <div className="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-1.5">
               <span>Post 7500 fradrag</span><span>{netAmount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
             </div>
