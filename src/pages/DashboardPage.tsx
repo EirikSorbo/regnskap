@@ -352,7 +352,7 @@ export default function DashboardPage() {
             <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email}</p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.00</span></p>
             </div>
           </div>
           <button onClick={() => setShowSettings(true)}
