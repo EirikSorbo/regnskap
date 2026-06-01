@@ -831,6 +831,20 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Quick-add shortcuts */}
+        <div className="flex gap-2">
+          <button onClick={() => navigate('/add?post=6500')}
+            className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
+            <span className="text-base">🎸</span>
+            <span>Utstyr</span>
+          </button>
+          <button onClick={() => navigate('/add?post=6800')}
+            className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
+            <span className="text-base">🍽️</span>
+            <span>Mat og drikke</span>
+          </button>
+        </div>
+
         {loading ? (
           <div className="text-center text-slate-400 py-12">Laster...</div>
         ) : (
