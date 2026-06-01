@@ -628,6 +628,84 @@ export default function DashboardPage() {
               <button onClick={() => { setShowArchive(false); setImportStatus('') }} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+
+              {/* Altinn overview */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Altinn-oversikt {selectedYear}</p>
+                <div className="rounded-xl border border-slate-200 overflow-hidden text-sm">
+                  {/* Income row */}
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-green-50 border-b border-slate-100">
+                    <div>
+                      <span className="font-semibold text-slate-700">Post 3000</span>
+                      <span className="text-slate-400 text-xs ml-2">Salgsinntekter</span>
+                    </div>
+                    <span className={`font-semibold tabular-nums ${totalIncome > 0 ? 'text-green-700' : 'text-slate-300'}`}>
+                      {totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                    </span>
+                  </div>
+                  {/* Expense rows per category that has entries or manual amounts */}
+                  {[...CATEGORIES]
+                    .filter(cat => cat.post !== '6000' && cat.post !== '7100')
+                    .map(cat => {
+                      const sum = yearEntries
+                        .filter(e => e.category.post === cat.post)
+                        .reduce((s, e) => s + getAmount(e), 0)
+                      if (sum === 0) return null
+                      return (
+                        <div key={cat.post} className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 last:border-0">
+                          <div>
+                            <span className="font-semibold text-slate-700">Post {cat.post}</span>
+                            <span className="text-slate-400 text-xs ml-2">{cat.label}</span>
+                          </div>
+                          <span className="font-semibold text-red-600 tabular-nums">
+                            {sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                          </span>
+                        </div>
+                      )
+                    })
+                  }
+                  {/* Hjemmekontor — manual amount */}
+                  {(() => {
+                    const hkSum = yearEntries.filter(e => e.category.post === '7100').reduce((s, e) => s + getAmount(e), 0)
+                    if (hkSum === 0) return null
+                    return (
+                      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 last:border-0">
+                        <div>
+                          <span className="font-semibold text-slate-700">Post 7100</span>
+                          <span className="text-slate-400 text-xs ml-2">Hjemmekontor</span>
+                        </div>
+                        <span className="font-semibold text-red-600 tabular-nums">
+                          {hkSum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                        </span>
+                      </div>
+                    )
+                  })()}
+                  {/* Avskrivninger — manual amount */}
+                  {(() => {
+                    const avSum = yearEntries.filter(e => e.category.post === '6000').reduce((s, e) => s + getAmount(e), 0)
+                    if (avSum === 0) return null
+                    return (
+                      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 last:border-0">
+                        <div>
+                          <span className="font-semibold text-slate-700">Post 6000</span>
+                          <span className="text-slate-400 text-xs ml-2">Avskrivninger</span>
+                        </div>
+                        <span className="font-semibold text-red-600 tabular-nums">
+                          {avSum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                        </span>
+                      </div>
+                    )
+                  })()}
+                  {/* Summary row */}
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 border-t border-slate-200">
+                    <span className="text-xs font-semibold text-slate-500">Resultat (inntekt − utgifter)</span>
+                    <span className={`font-bold tabular-nums text-sm ${totalIncome - totalExpenses >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                      {(totalIncome - totalExpenses).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Kvitteringer</p>
                 {(() => {
