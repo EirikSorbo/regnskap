@@ -19,9 +19,10 @@ function IconPlus() {
 }
 
 import { useState, useEffect } from 'react'
-import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc, getDocs } from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
+import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
 import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount } from '../types'
 import { useNavigate } from 'react-router-dom'
@@ -294,6 +295,50 @@ export default function DashboardPage() {
     setSavingHjemmekontor(false)
   }
 
+  async function handleDownloadReceipts() {
+    if (!user) return
+    const snap = await getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid)))
+    const withFiles = snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
+      .filter(e => e.imageUrl)
+    if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
+    const zip = new JSZip()
+    await Promise.all(withFiles.map(async (e) => {
+      try {
+        const resp = await fetch(e.imageUrl)
+        const blob = await resp.blob()
+        const ext = blob.type === 'application/pdf' ? 'pdf' : blob.type.split('/')[1] || 'jpg'
+        const name = e.imagePath ? e.imagePath.split('/').pop()! : `${e.id}.${ext}`
+        zip.file(name, blob)
+      } catch { /* skip if fetch fails */ }
+    }))
+    const content = await zip.generateAsync({ type: 'blob' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(content)
+    a.download = `kvitteringer_${selectedYear}.zip`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  async function handleBackup() {
+    if (!user) return
+    const [receiptSnap, incomeSnap] = await Promise.all([
+      getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid))),
+      getDocs(query(collection(db, 'income'), where('userId', '==', user.uid))),
+    ])
+    const data = {
+      exportedAt: new Date().toISOString(),
+      receipts: receiptSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      income: incomeSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `regnskap_backup_${format(new Date(), 'yyyy-MM-dd')}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   const years = Array.from(new Set([
     ...entries.map(e => parseInt(e.date.slice(0, 4))),
     ...incomeEntries.map(e => parseInt(e.date.slice(0, 4))),
@@ -354,20 +399,16 @@ export default function DashboardPage() {
                     <form onSubmit={handleAddIncome} className="space-y-2">
                       <div className="flex gap-2">
                         <input type="number" value={incomeAmount} onChange={e => setIncomeAmount(e.target.value)}
-                          min="0" step="0.01" placeholder="Beløp" required
-                          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                        <input type="date" value={incomeDate} onChange={e => setIncomeDate(e.target.value)} required
-                          className="border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                      </div>
-                      <div className="flex gap-2">
-                        <input type="text" value={incomeDesc} onChange={e => setIncomeDesc(e.target.value)}
-                          placeholder="Beskrivelse"
-                          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          inputMode="decimal" min="0" step="0.01" placeholder="Beløp" required
+                          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                         <button type="submit" disabled={savingIncome}
                           className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm px-3 py-2 rounded-lg transition whitespace-nowrap">
                           Legg til
                         </button>
                       </div>
+                      <input type="text" value={incomeDesc} onChange={e => setIncomeDesc(e.target.value)}
+                        placeholder="Beskrivelse (valgfritt)"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </form>
                     {yearIncome.length > 0 && (
                       <div className="space-y-1 pt-1 border-t border-slate-100">
@@ -428,8 +469,8 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-400 mb-2">Årsbeløp registreres på post 7100</p>
                 <div className="flex gap-2">
                   <input type="number" value={hjemmekontorAmt} onChange={e => setHjemmekontorAmt(e.target.value)}
-                    min="0" step="1" placeholder="0"
-                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    inputMode="decimal" min="0" step="1" placeholder="0"
+                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                   <button onClick={handleSaveHjemmekontor} disabled={savingHjemmekontor}
                     className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
                     {savingHjemmekontor ? '...' : 'Lagre'}
@@ -437,7 +478,15 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="border-t border-slate-100 pt-4">
+              <div className="border-t border-slate-100 pt-4 space-y-2">
+                <button onClick={handleDownloadReceipts}
+                  className="w-full text-sm text-slate-700 border border-slate-200 rounded-lg py-2 hover:bg-slate-50 transition">
+                  Last ned alle kvitteringer (ZIP)
+                </button>
+                <button onClick={handleBackup}
+                  className="w-full text-sm text-slate-700 border border-slate-200 rounded-lg py-2 hover:bg-slate-50 transition">
+                  Last ned backup (JSON)
+                </button>
                 <button onClick={() => signOut(auth)}
                   className="w-full text-sm text-red-500 border border-red-200 rounded-lg py-2 hover:bg-red-50 transition">
                   Logg ut

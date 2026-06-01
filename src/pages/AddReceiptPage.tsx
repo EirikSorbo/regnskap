@@ -104,7 +104,8 @@ export default function AddReceiptPage() {
         let imageUrl = existingImageUrl
         let imagePath = existingImagePath
         if (file) {
-          imagePath = `receipts/${user.uid}/${Date.now()}_${file.name}`
+          const monthStr = format(new Date(date), 'MM')
+          imagePath = `receipts/${user.uid}/${categoryPost}_${monthStr}_${file.name}`
           const storageRef = ref(storage, imagePath)
           await uploadBytes(storageRef, file)
           imageUrl = await getDownloadURL(storageRef)
