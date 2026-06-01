@@ -228,7 +228,6 @@ export default function AddReceiptPage() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*,application/pdf"
-                capture="environment"
                 className="hidden"
                 onChange={e => setFile(e.target.files?.[0] ?? null)}
               />
