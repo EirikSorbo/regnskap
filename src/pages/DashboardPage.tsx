@@ -855,6 +855,16 @@ export default function DashboardPage() {
                             </div>
                             <span className="text-sm font-semibold text-slate-700 shrink-0">{getAmount(d).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
                           </div>
+                          <div className="flex justify-end gap-2 mt-2">
+                            <button onClick={() => { setShowDrivingModal(false); navigate(`/add?edit=${d.id}`) }}
+                              className="flex items-center gap-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+                              <IconPencil /> Rediger
+                            </button>
+                            <button onClick={() => handleDelete(d)}
+                              className="flex items-center gap-1.5 text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50">
+                              <IconTrash /> Slett
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
