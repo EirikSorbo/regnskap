@@ -484,7 +484,7 @@ export default function DashboardPage() {
               <div>
                 <button onClick={() => setShowIncome(!showIncome)}
                   className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
-                  <span>Inntekter {selectedYear}</span>
+                  <span>Inntekter (post 3000)</span>
                   <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
                     {totalIncome > 0 && <span>{totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>}
                     <IconChevron open={showIncome} />
@@ -555,7 +555,7 @@ export default function DashboardPage() {
               <div>
                 <button onClick={() => setShowHjemmekontor(!showHjemmekontor)}
                   className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
-                  <span>Hjemmekontor {selectedYear}</span>
+                  <span>Hjemmekontor (post 7100)</span>
                   <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
                     {hjemmekontorAmt && parseFloat(hjemmekontorAmt) > 0 && (
                       <span>{parseFloat(hjemmekontorAmt).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
@@ -583,7 +583,7 @@ export default function DashboardPage() {
               <div>
                 <button onClick={() => setShowAvskrivninger(!showAvskrivninger)}
                   className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
-                  <span>Avskrivninger {selectedYear}</span>
+                  <span>Avskrivninger (post 6000)</span>
                   <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
                     {avskrivningerAmt && parseFloat(avskrivningerAmt) > 0 && (
                       <span>{parseFloat(avskrivningerAmt).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
