@@ -15,7 +15,7 @@ function IconX() {
   return <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
 }
 function IconPlus() {
-  return <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+  return <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
 }
 function IconArchive() {
   return <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
@@ -203,6 +203,8 @@ export default function DashboardPage() {
   const [incomeDate, setIncomeDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [savingIncome, setSavingIncome] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
+  const [showAltinn, setShowAltinn] = useState(false)
+  const [showReceiptList, setShowReceiptList] = useState(false)
   const [importStatus, setImportStatus] = useState('')
   const [downloadingZip, setDownloadingZip] = useState(false)
 
@@ -432,15 +434,10 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.13</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.14</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setShowArchive(true)}
-              className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
-              title="Arkiv">
-              <IconArchive />
-            </button>
             <button onClick={() => navigate('/add?type=driving')}
               className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
               title="Registrer kjøring">
@@ -450,6 +447,11 @@ export default function DashboardPage() {
               className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
               title="EKOM-kalkulator">
               <IconPhone />
+            </button>
+            <button onClick={() => setShowArchive(true)}
+              className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
+              title="Arkiv">
+              <IconArchive />
             </button>
             <button onClick={() => setShowSettings(true)}
               className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
@@ -631,110 +633,22 @@ export default function DashboardPage() {
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
 
-              {/* Altinn overview */}
+              {/* Altinn button */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Altinn-oversikt {selectedYear}</p>
-                <div className="rounded-xl border border-slate-200 overflow-hidden text-sm">
-                  {/* Income row */}
-                  <div className="flex items-center justify-between px-3 py-2.5 bg-green-50 border-b border-slate-100">
-                    <div>
-                      <span className="font-semibold text-slate-700">Post 3000</span>
-                      <span className="text-slate-400 text-xs ml-2">Salgsinntekter</span>
-                    </div>
-                    <span className={`font-semibold tabular-nums ${totalIncome > 0 ? 'text-green-700' : 'text-slate-300'}`}>
-                      {totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                    </span>
-                  </div>
-                  {/* Expense rows per category that has entries or manual amounts */}
-                  {[...CATEGORIES]
-                    .filter(cat => cat.post !== '6000' && cat.post !== '7100')
-                    .map(cat => {
-                      const sum = yearEntries
-                        .filter(e => e.category.post === cat.post)
-                        .reduce((s, e) => s + getAmount(e), 0)
-                      if (sum === 0) return null
-                      return (
-                        <div key={cat.post} className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 last:border-0">
-                          <div>
-                            <span className="font-semibold text-slate-700">Post {cat.post}</span>
-                            <span className="text-slate-400 text-xs ml-2">{cat.label}</span>
-                          </div>
-                          <span className="font-semibold text-red-600 tabular-nums">
-                            {sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                          </span>
-                        </div>
-                      )
-                    })
-                  }
-                  {/* Hjemmekontor — manual amount */}
-                  {(() => {
-                    const hkSum = yearEntries.filter(e => e.category.post === '7100').reduce((s, e) => s + getAmount(e), 0)
-                    if (hkSum === 0) return null
-                    return (
-                      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 last:border-0">
-                        <div>
-                          <span className="font-semibold text-slate-700">Post 7100</span>
-                          <span className="text-slate-400 text-xs ml-2">Hjemmekontor</span>
-                        </div>
-                        <span className="font-semibold text-red-600 tabular-nums">
-                          {hkSum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                        </span>
-                      </div>
-                    )
-                  })()}
-                  {/* Avskrivninger — manual amount */}
-                  {(() => {
-                    const avSum = yearEntries.filter(e => e.category.post === '6000').reduce((s, e) => s + getAmount(e), 0)
-                    if (avSum === 0) return null
-                    return (
-                      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 last:border-0">
-                        <div>
-                          <span className="font-semibold text-slate-700">Post 6000</span>
-                          <span className="text-slate-400 text-xs ml-2">Avskrivninger</span>
-                        </div>
-                        <span className="font-semibold text-red-600 tabular-nums">
-                          {avSum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                        </span>
-                      </div>
-                    )
-                  })()}
-                  {/* Summary row */}
-                  <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 border-t border-slate-200">
-                    <span className="text-xs font-semibold text-slate-500">Resultat (inntekt − utgifter)</span>
-                    <span className={`font-bold tabular-nums text-sm ${totalIncome - totalExpenses >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                      {(totalIncome - totalExpenses).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                    </span>
-                  </div>
-                </div>
+                <button onClick={() => setShowAltinn(true)}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition">
+                  <span>Altinn-oversikt {selectedYear}</span>
+                  <span className="text-slate-400 text-base">→</span>
+                </button>
               </div>
 
+              {/* Kvitteringer button */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Kvitteringer</p>
-                {(() => {
-                  const files = entries
-                    .filter(e => e.entryType === 'receipt' && (e as ReceiptEntry).imageUrl)
-                    .sort((a, b) => b.date.localeCompare(a.date))
-                  if (files.length === 0) return <p className="text-xs text-slate-400">Ingen vedlegg lastet opp.</p>
-                  return (
-                    <div className="space-y-2">
-                      {files.map(e => {
-                        const r = e as ReceiptEntry
-                        const filename = r.imagePath?.split('/').pop() ?? 'vedlegg'
-                        const isPdf = filename.toLowerCase().endsWith('.pdf') || r.imageUrl?.includes('.pdf')
-                        return (
-                          <a key={e.id} href={r.imageUrl} target="_blank" rel="noopener noreferrer"
-                            className="flex items-start gap-2 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
-                            <span className="text-lg leading-none mt-0.5">{isPdf ? '📄' : '🖼️'}</span>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-medium text-blue-600 truncate">{filename}</p>
-                              <p className="text-xs text-slate-400">{e.category.label} · {format(new Date(e.date), 'd. MMM yyyy', { locale: nb })}</p>
-                            </div>
-                          </a>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
+                <button onClick={() => setShowReceiptList(true)}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition">
+                  <span>Kvitteringer</span>
+                  <span className="text-slate-400 text-xs font-normal">{entries.filter(e => e.entryType === 'receipt' && (e as ReceiptEntry).imageUrl).length} vedlegg →</span>
+                </button>
               </div>
               <div className="border-t border-slate-100 pt-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Last ned alle</p>
@@ -778,13 +692,139 @@ export default function DashboardPage() {
         <EkomModal userId={user.uid} year={selectedYear} onClose={() => setShowEkomModal(false)} />
       )}
 
+      {/* Altinn modal */}
+      {showAltinn && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAltinn(false)} />
+          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+              <h2 className="text-base font-semibold text-slate-800">Altinn-oversikt {selectedYear}</h2>
+              <button onClick={() => setShowAltinn(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="rounded-none overflow-hidden text-sm">
+                {/* Income */}
+                <div className="flex items-center justify-between px-5 py-3 bg-green-50 border-b border-slate-100">
+                  <div>
+                    <span className="font-semibold text-slate-700">Post 3000</span>
+                    <span className="text-slate-400 text-xs ml-2">Salgsinntekter</span>
+                  </div>
+                  <span className={`font-semibold tabular-nums ${totalIncome > 0 ? 'text-green-700' : 'text-slate-300'}`}>
+                    {totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                  </span>
+                </div>
+                {/* All expense categories — always shown */}
+                {[...CATEGORIES].filter(cat => cat.post !== '6000' && cat.post !== '7100').map(cat => {
+                  const sum = yearEntries.filter(e => e.category.post === cat.post).reduce((s, e) => s + getAmount(e), 0)
+                  return (
+                    <div key={cat.post} className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                      <div>
+                        <span className="font-semibold text-slate-700">Post {cat.post}</span>
+                        <span className="text-slate-400 text-xs ml-2">{cat.label}</span>
+                      </div>
+                      <span className={`font-semibold tabular-nums ${sum > 0 ? 'text-red-600' : 'text-slate-300'}`}>
+                        {sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                      </span>
+                    </div>
+                  )
+                })}
+                {/* Hjemmekontor */}
+                {(() => {
+                  const sum = yearEntries.filter(e => e.category.post === '7100').reduce((s, e) => s + getAmount(e), 0)
+                  return (
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                      <div>
+                        <span className="font-semibold text-slate-700">Post 7100</span>
+                        <span className="text-slate-400 text-xs ml-2">Hjemmekontor</span>
+                      </div>
+                      <span className={`font-semibold tabular-nums ${sum > 0 ? 'text-red-600' : 'text-slate-300'}`}>
+                        {sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Avskrivninger */}
+                {(() => {
+                  const sum = yearEntries.filter(e => e.category.post === '6000').reduce((s, e) => s + getAmount(e), 0)
+                  return (
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                      <div>
+                        <span className="font-semibold text-slate-700">Post 6000</span>
+                        <span className="text-slate-400 text-xs ml-2">Avskrivninger (saldometoden 30%)</span>
+                      </div>
+                      <span className={`font-semibold tabular-nums ${sum > 0 ? 'text-red-600' : 'text-slate-300'}`}>
+                        {sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Result */}
+                <div className="flex items-center justify-between px-5 py-4 bg-slate-50 border-t border-slate-200">
+                  <span className="text-sm font-semibold text-slate-600">Resultat (inntekt − utgifter)</span>
+                  <span className={`font-bold tabular-nums text-base ${totalIncome - totalExpenses >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    {(totalIncome - totalExpenses).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt list modal */}
+      {showReceiptList && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowReceiptList(false)} />
+          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+              <h2 className="text-base font-semibold text-slate-800">Kvitteringer</h2>
+              <button onClick={() => setShowReceiptList(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {(() => {
+                const files = entries
+                  .filter(e => e.entryType === 'receipt' && (e as ReceiptEntry).imageUrl)
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                if (files.length === 0) return <p className="text-sm text-slate-400 py-8 text-center">Ingen vedlegg lastet opp.</p>
+                return (
+                  <div className="space-y-2">
+                    {files.map(e => {
+                      const r = e as ReceiptEntry
+                      const filename = r.imagePath?.split('/').pop() ?? 'vedlegg'
+                      const isPdf = filename.toLowerCase().endsWith('.pdf') || r.imageUrl?.includes('.pdf')
+                      return (
+                        <a key={e.id} href={r.imageUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex items-start gap-2 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
+                          <span className="text-lg leading-none mt-0.5">{isPdf ? '📄' : '🖼️'}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-blue-600 truncate">{filename}</p>
+                            <p className="text-xs text-slate-400">{e.category.label} · {format(new Date(e.date), 'd. MMM yyyy', { locale: nb })}</p>
+                          </div>
+                        </a>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
 
         {/* Summary card */}
         <div className="bg-blue-600 text-white rounded-2xl p-5">
           <p className="text-sm text-blue-100">Totale utgifter {selectedYear}</p>
           <p className="text-3xl font-bold mt-1">{totalExpenses.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
-          <p className="text-xs text-blue-200 mt-1">{yearEntries.length} oppføringer</p>
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-xs text-blue-200">{yearEntries.length} oppføringer</p>
+            <button onClick={() => navigate('/add')}
+              className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+              <IconPlus />
+              Legg til utgift
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -795,10 +835,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <button onClick={() => navigate('/add')}
-        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition">
-        <IconPlus />
-      </button>
     </div>
   )
 }
