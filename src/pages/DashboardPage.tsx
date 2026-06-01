@@ -205,6 +205,7 @@ export default function DashboardPage() {
   const [showArchive, setShowArchive] = useState(false)
   const [showAltinn, setShowAltinn] = useState(false)
   const [showReceiptList, setShowReceiptList] = useState(false)
+  const [showDrivingModal, setShowDrivingModal] = useState(false)
   const [importStatus, setImportStatus] = useState('')
   const [downloadingZip, setDownloadingZip] = useState(false)
 
@@ -442,9 +443,9 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => navigate('/add?type=driving')}
+            <button onClick={() => setShowDrivingModal(true)}
               className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
-              title="Registrer kjøring">
+              title="Kjøring">
               <IconCar />
             </button>
             <button onClick={() => setShowEkomModal(true)}
@@ -696,6 +697,67 @@ export default function DashboardPage() {
         <EkomModal userId={user.uid} year={selectedYear} onClose={() => setShowEkomModal(false)} />
       )}
 
+      {/* Driving overview modal */}
+      {showDrivingModal && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowDrivingModal(false)} />
+          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+              <h2 className="text-base font-semibold text-slate-800">Kjøring {selectedYear}</h2>
+              <button onClick={() => setShowDrivingModal(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {(() => {
+                const drivingEntries = yearEntries.filter(e => e.entryType === 'driving') as DrivingEntry[]
+                const totalKm = drivingEntries.reduce((s, d) => s + (d.tripType === 'return' ? d.distance * 2 : d.distance), 0)
+                const totalAmt = drivingEntries.reduce((s, e) => s + getAmount(e), 0)
+                if (drivingEntries.length === 0) {
+                  return <p className="text-sm text-slate-400 py-8 text-center">Ingen kjøreturer registrert for {selectedYear}.</p>
+                }
+                return (
+                  <>
+                    <div className="flex gap-3 text-xs">
+                      <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2">
+                        <p className="text-slate-400">Antall turer</p>
+                        <p className="font-semibold text-slate-800 text-sm">{drivingEntries.length}</p>
+                      </div>
+                      <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2">
+                        <p className="text-slate-400">Totalt km</p>
+                        <p className="font-semibold text-slate-800 text-sm">{totalKm.toLocaleString('nb-NO')} km</p>
+                      </div>
+                      <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2">
+                        <p className="text-slate-400">Fradrag</p>
+                        <p className="font-semibold text-slate-800 text-sm">{totalAmt.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {drivingEntries.sort((a, b) => b.date.localeCompare(a.date)).map(d => (
+                        <div key={d.id} className="border border-slate-200 rounded-lg px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-slate-800 truncate">{d.from} → {d.to}{d.tripType === 'return' ? ' (t/r)' : ''}</p>
+                              <p className="text-xs text-slate-400">{format(new Date(d.date), 'd. MMM yyyy', { locale: nb })} · {d.tripType === 'return' ? d.distance * 2 : d.distance} km{d.passengers > 0 ? ` · ${d.passengers} pass.` : ''}</p>
+                              {d.description && <p className="text-xs text-slate-400 mt-0.5">{d.description}</p>}
+                            </div>
+                            <span className="text-sm font-semibold text-slate-700 shrink-0">{getAmount(d).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+            <div className="px-5 pb-5 pt-3 border-t border-slate-100 shrink-0">
+              <button onClick={() => { setShowDrivingModal(false); navigate('/add?type=driving') }}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition text-sm">
+                <IconPlus /> Legg til kjøring
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Altinn modal */}
       {showAltinn && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
@@ -840,6 +902,10 @@ export default function DashboardPage() {
           <button onClick={() => navigate('/add?post=6800')}
             className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
             <span>Mat og drikke</span>
+          </button>
+          <button onClick={() => navigate('/add?type=driving')}
+            className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
+            <span>Kjøring</span>
           </button>
         </div>
 
