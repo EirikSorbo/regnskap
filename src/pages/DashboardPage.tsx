@@ -301,24 +301,31 @@ export default function DashboardPage() {
     try {
       const snap = await getDocs(collection(db, 'receipts'))
       const withFiles = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string })
-        ).filter(e => e.userId === user.uid && e.imagePath)
-      if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
+        .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
+        .filter(e => e.userId === user.uid && e.imagePath)
+      if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); setDownloadingZip(false); return }
+
       const zip = new JSZip()
       let added = 0
       const errors: string[] = []
-      await Promise.all(withFiles.map(async (e) => {
+
+      // Fetch one at a time to avoid hanging on parallel requests
+      for (const e of withFiles) {
         try {
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout')), 15000)
+          )
           const storageRef = ref(storage, e.imagePath)
-          const blob = await getBlob(storageRef)
+          const blob = await Promise.race([getBlob(storageRef), timeoutPromise])
           const name = e.imagePath.split('/').pop()!
           zip.file(name, blob)
           added++
         } catch (err) {
-          console.warn('Kunne ikke hente', e.imagePath, err)
-          errors.push(e.imagePath)
+          console.warn('Feil for', e.imagePath, err)
+          errors.push(e.imagePath.split('/').pop() ?? e.imagePath)
         }
-      }))
+      }
+
       if (added === 0) {
         alert(`Ingen filer kunne lastes ned.\n\nFeil:\n${errors.join('\n')}`)
         return
@@ -332,7 +339,7 @@ export default function DashboardPage() {
       if (errors.length > 0) alert(`${added} filer lastet ned.\n${errors.length} feilet:\n${errors.join('\n')}`)
     } catch (err) {
       console.error(err)
-      alert('Feil ved nedlasting: ' + (err instanceof Error ? err.message : String(err)))
+      alert('Feil: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setDownloadingZip(false)
     }
@@ -371,7 +378,7 @@ export default function DashboardPage() {
             <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.02</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.03</span></p>
             </div>
           </div>
           <button onClick={() => setShowSettings(true)}
