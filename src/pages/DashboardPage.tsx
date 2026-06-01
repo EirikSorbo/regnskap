@@ -20,7 +20,7 @@ function IconPlus() {
 
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc, getDocs } from 'firebase/firestore'
-import { ref, deleteObject } from 'firebase/storage'
+import { ref, deleteObject, getBlob } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
 import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
@@ -299,18 +299,20 @@ export default function DashboardPage() {
     const snap = await getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid)))
     const withFiles = snap.docs
       .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
-      .filter(e => e.imageUrl)
+      .filter(e => e.imagePath)
     if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
     const zip = new JSZip()
+    let added = 0
     await Promise.all(withFiles.map(async (e) => {
       try {
-        const resp = await fetch(e.imageUrl)
-        const blob = await resp.blob()
-        const ext = blob.type === 'application/pdf' ? 'pdf' : blob.type.split('/')[1] || 'jpg'
-        const name = e.imagePath ? e.imagePath.split('/').pop()! : `${e.id}.${ext}`
+        const storageRef = ref(storage, e.imagePath)
+        const blob = await getBlob(storageRef)
+        const name = e.imagePath.split('/').pop()!
         zip.file(name, blob)
-      } catch { /* skip if fetch fails */ }
+        added++
+      } catch (err) { console.warn('Kunne ikke hente', e.imagePath, err) }
     }))
+    if (added === 0) { alert('Ingen filer kunne lastes ned. Sjekk konsollen for detaljer.'); return }
     const content = await zip.generateAsync({ type: 'blob' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(content)
