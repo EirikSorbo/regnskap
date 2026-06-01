@@ -421,9 +421,13 @@ export default function DashboardPage() {
     e.target.value = ''
   }
 
+  const currentYear = new Date().getFullYear()
   const years = Array.from(new Set([
     ...entries.map(e => parseInt(e.date.slice(0, 4))),
     ...incomeEntries.map(e => parseInt(e.date.slice(0, 4))),
+    currentYear,
+    currentYear - 1,
+    currentYear - 2,
   ])).sort((a, b) => b - a)
   if (!years.includes(selectedYear)) years.push(selectedYear)
 
