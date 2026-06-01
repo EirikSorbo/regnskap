@@ -45,6 +45,8 @@ const EKOM_PRIVATE_AMT_KEY = 'ekom_private_amt'
 const EKOM_ID_KEY = (y: number) => `ekom_entry_id_${y}`
 const HK_AMOUNT_KEY = (y: number) => `hjemmekontor_amount_${y}`
 const HK_ID_KEY = (y: number) => `hjemmekontor_entry_id_${y}`
+const AV_AMOUNT_KEY = (y: number) => `avskrivninger_amount_${y}`
+const AV_ID_KEY = (y: number) => `avskrivninger_entry_id_${y}`
 
 const MONTHS = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
 const QUARTERS = ['Q1 (jan–mar)', 'Q2 (apr–jun)', 'Q3 (jul–sep)', 'Q4 (okt–des)']
@@ -185,11 +187,12 @@ export default function DashboardPage() {
   const [showIncome, setShowIncome] = useState(false)
   const [hjemmekontorAmt, setHjemmekontorAmt] = useState('')
   const [savingHjemmekontor, setSavingHjemmekontor] = useState(false)
+  const [avskrivningerAmt, setAvskrivningerAmt] = useState('')
+  const [savingAvskrivninger, setSavingAvskrivninger] = useState(false)
 
   // Income form
   const [incomeAmount, setIncomeAmount] = useState('')
   const [incomeDate, setIncomeDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [incomeDesc, setIncomeDesc] = useState('')
   const [savingIncome, setSavingIncome] = useState(false)
   const [downloadingZip, setDownloadingZip] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
@@ -200,6 +203,7 @@ export default function DashboardPage() {
   useEffect(() => { localStorage.setItem(YEAR_KEY, String(selectedYear)) }, [selectedYear])
   useEffect(() => {
     setHjemmekontorAmt(localStorage.getItem(HK_AMOUNT_KEY(selectedYear)) || '')
+    setAvskrivningerAmt(localStorage.getItem(AV_AMOUNT_KEY(selectedYear)) || '')
   }, [selectedYear])
 
   useEffect(() => {
@@ -264,11 +268,9 @@ export default function DashboardPage() {
         userId: user.uid,
         amount: parseFloat(incomeAmount),
         date: incomeDate,
-        description: incomeDesc,
         createdAt: Date.now(),
       })
       setIncomeAmount('')
-      setIncomeDesc('')
       setIncomeDate(format(new Date(), 'yyyy-MM-dd'))
     } catch (err) { console.error(err) }
     finally { setSavingIncome(false) }
@@ -301,6 +303,29 @@ export default function DashboardPage() {
       localStorage.setItem(HK_ID_KEY(selectedYear), d.id)
     }
     setSavingHjemmekontor(false)
+  }
+
+  async function handleSaveAvskrivninger() {
+    if (!user) return
+    setSavingAvskrivninger(true)
+    const amount = parseFloat(avskrivningerAmt) || 0
+    localStorage.setItem(AV_AMOUNT_KEY(selectedYear), String(amount))
+    const category = CATEGORIES.find(c => c.post === '6000')!
+    const updateData = { amount, category, description: 'Avskrivninger (automatisk)' }
+    const existingId = localStorage.getItem(AV_ID_KEY(selectedYear))
+    if (existingId) {
+      try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
+      catch {
+        if (amount > 0) {
+          const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
+          localStorage.setItem(AV_ID_KEY(selectedYear), d.id)
+        }
+      }
+    } else if (amount > 0) {
+      const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
+      localStorage.setItem(AV_ID_KEY(selectedYear), d.id)
+    }
+    setSavingAvskrivninger(false)
   }
 
   async function handleDownloadReceipts() {
@@ -426,7 +451,7 @@ export default function DashboardPage() {
             <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.05</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.06</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -486,9 +511,6 @@ export default function DashboardPage() {
                           Legg til
                         </button>
                       </div>
-                      <input type="text" value={incomeDesc} onChange={e => setIncomeDesc(e.target.value)}
-                        placeholder="Beskrivelse (valgfritt)"
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </form>
                     {yearIncome.length > 0 && (
                       <div className="space-y-1 pt-1 border-t border-slate-100">
@@ -496,7 +518,6 @@ export default function DashboardPage() {
                           <div key={inc.id} className="flex items-center justify-between text-xs py-1">
                             <div className="text-slate-600 flex-1 min-w-0">
                               <span className="font-medium">{inc.amount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
-                              {inc.description && <span className="text-slate-400 ml-1">{inc.description}</span>}
                               <span className="text-slate-300 ml-1">{format(new Date(inc.date), 'd. MMM', { locale: nb })}</span>
                             </div>
                             <button onClick={() => handleDeleteIncome(inc)} className="text-slate-300 hover:text-red-400 ml-2 shrink-0"><IconTrash /></button>
@@ -554,6 +575,21 @@ export default function DashboardPage() {
                   <button onClick={handleSaveHjemmekontor} disabled={savingHjemmekontor}
                     className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
                     {savingHjemmekontor ? '...' : 'Lagre'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Avskrivninger */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Avskrivninger</label>
+                <p className="text-xs text-slate-400 mb-2">Årsbeløp registreres på post 6000</p>
+                <div className="flex gap-2">
+                  <input type="number" value={avskrivningerAmt} onChange={e => setAvskrivningerAmt(e.target.value)}
+                    inputMode="decimal" min="0" step="1" placeholder="0"
+                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <button onClick={handleSaveAvskrivninger} disabled={savingAvskrivninger}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
+                    {savingAvskrivninger ? '...' : 'Lagre'}
                   </button>
                 </div>
               </div>
