@@ -23,6 +23,9 @@ function IconArchive() {
 function IconUpload() {
   return <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
 }
+function IconPhone() {
+  return <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+}
 
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc, getDocs } from 'firebase/firestore'
@@ -185,6 +188,8 @@ export default function DashboardPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [showEkomModal, setShowEkomModal] = useState(false)
   const [showIncome, setShowIncome] = useState(false)
+  const [showDriving, setShowDriving] = useState(false)
+  const [showHjemmekontor, setShowHjemmekontor] = useState(false)
   const [hjemmekontorAmt, setHjemmekontorAmt] = useState('')
   const [savingHjemmekontor, setSavingHjemmekontor] = useState(false)
   const [avskrivningerAmt, setAvskrivningerAmt] = useState('')
@@ -431,7 +436,7 @@ export default function DashboardPage() {
             <img src="/regnskap/logo.png" alt="logo" className="w-8 h-8 object-contain" />
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.08</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.09</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -439,6 +444,11 @@ export default function DashboardPage() {
               className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
               title="Arkiv">
               <IconArchive />
+            </button>
+            <button onClick={() => setShowEkomModal(true)}
+              className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
+              title="EKOM-kalkulator">
+              <IconPhone />
             </button>
             <button onClick={() => setShowSettings(true)}
               className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition"
@@ -514,49 +524,58 @@ export default function DashboardPage() {
 
               {/* Driving rates */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Kjøresatser</label>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Kr per km</label>
-                    <input type="number" value={ratePerKm} onChange={e => setRatePerKm(parseFloat(e.target.value))}
-                      min="0" step="0.01"
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Kr per passasjer per km</label>
-                    <input type="number" value={ratePerPassengerKm} onChange={e => setRatePerPassengerKm(parseFloat(e.target.value))}
-                      min="0" step="0.01"
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
-              </div>
-
-              {/* EKOM */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">EKOM (Telefon & internett)</label>
-                <button onClick={() => { setShowSettings(false); setShowEkomModal(true) }}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 text-left transition flex items-center justify-between">
-                  <span>Åpne EKOM-kalkulator for {selectedYear}</span>
-                  <span className="text-slate-400">→</span>
+                <button onClick={() => setShowDriving(!showDriving)}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
+                  <span>Kjøresatser</span>
+                  <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
+                    <span>{ratePerKm.toFixed(2)} kr/km</span>
+                    <IconChevron open={showDriving} />
+                  </span>
                 </button>
-                {localStorage.getItem(EKOM_ID_KEY(selectedYear)) && (
-                  <p className="text-xs text-green-600 mt-1">Beregning lagret for {selectedYear}</p>
+                {showDriving && (
+                  <div className="space-y-3 mt-2">
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Kr per km</label>
+                      <input type="number" value={ratePerKm} onChange={e => setRatePerKm(parseFloat(e.target.value))}
+                        min="0" step="0.01"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Kr per passasjer per km</label>
+                      <input type="number" value={ratePerPassengerKm} onChange={e => setRatePerPassengerKm(parseFloat(e.target.value))}
+                        min="0" step="0.01"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
                 )}
               </div>
 
               {/* Hjemmekontor */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Hjemmekontor</label>
-                <p className="text-xs text-slate-400 mb-2">Årsbeløp registreres på post 7100</p>
-                <div className="flex gap-2">
-                  <input type="number" value={hjemmekontorAmt} onChange={e => setHjemmekontorAmt(e.target.value)}
-                    inputMode="decimal" min="0" step="1" placeholder="0"
-                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                  <button onClick={handleSaveHjemmekontor} disabled={savingHjemmekontor}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
-                    {savingHjemmekontor ? '...' : 'Lagre'}
-                  </button>
-                </div>
+                <button onClick={() => setShowHjemmekontor(!showHjemmekontor)}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
+                  <span>Hjemmekontor {selectedYear}</span>
+                  <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
+                    {hjemmekontorAmt && parseFloat(hjemmekontorAmt) > 0 && (
+                      <span>{parseFloat(hjemmekontorAmt).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+                    )}
+                    <IconChevron open={showHjemmekontor} />
+                  </span>
+                </button>
+                {showHjemmekontor && (
+                  <div className="mt-2">
+                    <p className="text-xs text-slate-400 mb-2">Årsbeløp registreres på post 7100</p>
+                    <div className="flex gap-2">
+                      <input type="number" value={hjemmekontorAmt} onChange={e => setHjemmekontorAmt(e.target.value)}
+                        inputMode="decimal" min="0" step="1" placeholder="0"
+                        className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      <button onClick={handleSaveHjemmekontor} disabled={savingHjemmekontor}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
+                        {savingHjemmekontor ? '...' : 'Lagre'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Avskrivninger */}
@@ -630,9 +649,7 @@ export default function DashboardPage() {
                   <IconArchive />
                   <span>{downloadingZip ? 'Laster ned...' : 'Last ned alle kvitteringer (ZIP)'}</span>
                 </button>
-                <p className="text-xs text-amber-500 mt-2">⚠ Krever CORS-konfigurasjon på storage-bucket. Kjør én gang i terminal:<br/>
-                  <code className="text-xs bg-slate-100 rounded px-1 select-all">gsutil cors set cors.json gs://regnskap-a355e.firebasestorage.app</code>
-                </p>
+
               </div>
               <div className="border-t border-slate-100 pt-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Backup</p>
