@@ -3,7 +3,7 @@ import { collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { CATEGORIES, DRIVING_CATEGORY, type ReceiptEntry, type DrivingEntry } from '../types'
+import { CATEGORIES, DRIVING_CATEGORY, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 
@@ -34,8 +34,8 @@ export default function AddReceiptPage() {
 
   // Receipt fields
   const [amount, setAmount] = useState('')
-  const [existingImageUrl, setExistingImageUrl] = useState('')
-  const [existingImagePath, setExistingImagePath] = useState('')
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([])
+  const [existingImagePaths, setExistingImagePaths] = useState<string[]>([])
 
   // Driving fields
   const [from, setFrom] = useState('Hjemme')
@@ -44,8 +44,8 @@ export default function AddReceiptPage() {
   const [distance, setDistance] = useState('')
   const [passengers, setPassengers] = useState('')
 
-  // File attachment
-  const [file, setFile] = useState<File | null>(null)
+  // File attachments
+  const [files, setFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Shared
@@ -74,8 +74,8 @@ export default function AddReceiptPage() {
       } else {
         const r = data as ReceiptEntry
         setAmount(String(r.amount))
-        setExistingImageUrl(r.imageUrl || '')
-        setExistingImagePath(r.imagePath || '')
+        setExistingImageUrls(getImageUrls(r))
+        setExistingImagePaths(getImagePaths(r))
       }
       setLoadingEntry(false)
     })
@@ -106,20 +106,27 @@ export default function AddReceiptPage() {
         }
       } else {
         if (!amount || isNaN(Number(amount))) { setError('Ugyldig beløp.'); setSaving(false); return }
-        let imageUrl = existingImageUrl
-        let imagePath = existingImagePath
-        if (file) {
+        const imageUrls = [...existingImageUrls]
+        const imagePaths = [...existingImagePaths]
+        if (files.length > 0) {
           const monthStr = format(new Date(date), 'MM')
-          imagePath = `receipts/${user.uid}/${categoryPost}_${monthStr}_${file.name}`
-          const storageRef = ref(storage, imagePath)
-          await uploadBytes(storageRef, file)
-          imageUrl = await getDownloadURL(storageRef)
+          for (const f of files) {
+            const path = `receipts/${user.uid}/${categoryPost}_${monthStr}_${f.name}`
+            const storageRef = ref(storage, path)
+            await uploadBytes(storageRef, f)
+            const url = await getDownloadURL(storageRef)
+            imagePaths.push(path)
+            imageUrls.push(url)
+          }
         }
         const data = {
           entryType: 'receipt' as const,
           amount: parseFloat(amount),
           date, category, description,
-          imageUrl, imagePath,
+          imageUrl: imageUrls[0] || '',
+          imagePath: imagePaths[0] || '',
+          imageUrls,
+          imagePaths,
         }
         if (isEditing) {
           await updateDoc(doc(db, 'receipts', editId!), data)
@@ -234,29 +241,38 @@ export default function AddReceiptPage() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*,application/pdf"
+                multiple
                 className="hidden"
-                onChange={e => setFile(e.target.files?.[0] ?? null)}
+                onChange={e => {
+                  const selected = e.target.files ? Array.from(e.target.files) : []
+                  if (selected.length > 0) setFiles(prev => [...prev, ...selected])
+                  if (fileInputRef.current) fileInputRef.current.value = ''
+                }}
               />
-              {file ? (
-                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              {/* Existing attachments */}
+              {existingImageUrls.map((_url, i) => (
+                <div key={`existing-${i}`} className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-1.5">
+                  <IconPaperclip />
+                  <span className="text-slate-600 text-sm flex-1 truncate">{existingImagePaths[i]?.split('/').pop() || 'Vedlegg'}</span>
+                  <button type="button" onClick={() => {
+                    setExistingImageUrls(prev => prev.filter((_, j) => j !== i))
+                    setExistingImagePaths(prev => prev.filter((_, j) => j !== i))
+                  }} className="text-xs text-slate-400 hover:text-red-500">Fjern</button>
+                </div>
+              ))}
+              {/* New files */}
+              {files.map((f, i) => (
+                <div key={`new-${i}`} className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-1.5">
                   <IconCheck />
-                  <span className="text-green-700 text-sm flex-1 truncate">{file.name}</span>
-                  <button type="button" onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                  <span className="text-green-700 text-sm flex-1 truncate">{f.name}</span>
+                  <button type="button" onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}
                     className="text-xs text-slate-400 hover:text-red-500">Fjern</button>
                 </div>
-              ) : existingImageUrl ? (
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                  <IconPaperclip />
-                  <span className="text-slate-600 text-sm flex-1 truncate">Eksisterende vedlegg</span>
-                  <button type="button" onClick={() => fileInputRef.current?.click()}
-                    className="text-xs text-blue-500 hover:text-blue-700">Bytt</button>
-                </div>
-              ) : (
-                <button type="button" onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-slate-300 rounded-lg py-3 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-500 transition flex items-center justify-center gap-2">
-                  <IconPaperclip /> Legg ved kvittering (valgfritt)
-                </button>
-              )}
+              ))}
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-slate-300 rounded-lg py-3 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-500 transition flex items-center justify-center gap-2">
+                <IconPaperclip /> {existingImageUrls.length + files.length > 0 ? 'Legg til flere vedlegg' : 'Legg ved kvittering (valgfritt)'}
+              </button>
             </div>
           </div>
         )}

@@ -17,7 +17,23 @@ export interface ReceiptEntry extends BaseEntry {
   entryType: 'receipt'
   imageUrl: string
   imagePath: string
+  imageUrls?: string[]
+  imagePaths?: string[]
   amount: number
+}
+
+/** Get all image URLs for a receipt (handles both old single-field and new multi-field format) */
+export function getImageUrls(r: ReceiptEntry): string[] {
+  const urls = r.imageUrls?.length ? [...r.imageUrls] : []
+  if (r.imageUrl && !urls.includes(r.imageUrl)) urls.unshift(r.imageUrl)
+  return urls.filter(Boolean)
+}
+
+/** Get all image paths for a receipt (handles both old single-field and new multi-field format) */
+export function getImagePaths(r: ReceiptEntry): string[] {
+  const paths = r.imagePaths?.length ? [...r.imagePaths] : []
+  if (r.imagePath && !paths.includes(r.imagePath)) paths.unshift(r.imagePath)
+  return paths.filter(Boolean)
 }
 
 export interface DrivingEntry extends BaseEntry {

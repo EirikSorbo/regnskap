@@ -36,7 +36,7 @@ import { ref, deleteObject, getBlob, uploadBytes } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
 import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
-import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount } from '../types'
+import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount, getImageUrls, getImagePaths } from '../types'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -330,8 +330,10 @@ export default function DashboardPage() {
     if (!entry.id) return
     if (!confirm('Slett denne oppføringen?')) return
     try {
-      if (entry.entryType === 'receipt' && (entry as ReceiptEntry).imagePath) {
-        try { await deleteObject(ref(storage, (entry as ReceiptEntry).imagePath)) } catch {}
+      if (entry.entryType === 'receipt') {
+        for (const p of getImagePaths(entry as ReceiptEntry)) {
+          try { await deleteObject(ref(storage, p)) } catch {}
+        }
       }
       await deleteDoc(doc(db, 'receipts', entry.id))
     } catch (e) { console.error(e) }
@@ -411,19 +413,19 @@ export default function DashboardPage() {
     setDownloadingZip(true)
     try {
       const snap = await getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid)))
-      const withFiles = snap.docs
+      const allEntries = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
-        .filter(e => e.imagePath &&
-          (!yearFilter || e.date?.startsWith(String(yearFilter))))
-      if (withFiles.length === 0) { alert('Ingen vedlegg funnet.'); return }
+        .filter(e => (!yearFilter || e.date?.startsWith(String(yearFilter))))
+      const allPaths = allEntries.flatMap(e => getImagePaths(e))
+      if (allPaths.length === 0) { alert('Ingen vedlegg funnet.'); return }
       const zip = new JSZip()
       let added = 0
       const errors: string[] = []
-      for (const e of withFiles) {
-        const name = e.imagePath.split('/').pop()!
+      for (const path of allPaths) {
+        const name = path.split('/').pop()!
         try {
           const blob = await Promise.race([
-            getBlob(ref(storage, e.imagePath)),
+            getBlob(ref(storage, path)),
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
           ])
           zip.file(name, blob)
@@ -484,14 +486,14 @@ export default function DashboardPage() {
       }
       const zip = new JSZip()
       zip.file(`regnskap_backup_${yearFilter ?? 'alle'}_${format(new Date(), 'yyyy-MM-dd')}.json`, JSON.stringify(jsonData, null, 2))
-      const withFiles = receipts.filter(e => e.imagePath && filterFn(e))
+      const allPaths = receipts.filter(filterFn).flatMap(e => getImagePaths(e))
       let added = 0
       const errors: string[] = []
-      for (const e of withFiles) {
-        const name = e.imagePath.split('/').pop()!
+      for (const path of allPaths) {
+        const name = path.split('/').pop()!
         try {
           const blob = await Promise.race([
-            getBlob(ref(storage, e.imagePath)),
+            getBlob(ref(storage, path)),
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
           ])
           zip.file(`vedlegg/${name}`, blob)
@@ -643,7 +645,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.28</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.29</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -858,7 +860,7 @@ export default function DashboardPage() {
                 <button onClick={() => setShowReceiptList(true)}
                   className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition">
                   <span>Kvitteringer</span>
-                  <span className="text-slate-400 text-xs font-normal">{entries.filter(e => e.entryType === 'receipt' && (e as ReceiptEntry).imageUrl).length} vedlegg →</span>
+                  <span className="text-slate-400 text-xs font-normal">{entries.filter(e => e.entryType === 'receipt').reduce((sum, e) => sum + getImageUrls(e as ReceiptEntry).length, 0)} vedlegg →</span>
                 </button>
               </div>
               <div className="border-t border-slate-100 pt-4">
@@ -1100,23 +1102,28 @@ export default function DashboardPage() {
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4">
               {(() => {
-                const files = entries
-                  .filter(e => e.entryType === 'receipt' && (e as ReceiptEntry).imageUrl)
+                const receiptFiles = entries
+                  .filter(e => e.entryType === 'receipt')
                   .sort((a, b) => b.date.localeCompare(a.date))
-                if (files.length === 0) return <p className="text-sm text-slate-400 py-8 text-center">Ingen vedlegg lastet opp.</p>
+                  .flatMap(e => {
+                    const r = e as ReceiptEntry
+                    const urls = getImageUrls(r)
+                    const paths = getImagePaths(r)
+                    return urls.map((url, i) => ({ entry: e, url, path: paths[i] || '' }))
+                  })
+                if (receiptFiles.length === 0) return <p className="text-sm text-slate-400 py-8 text-center">Ingen vedlegg lastet opp.</p>
                 return (
                   <div className="space-y-2">
-                    {files.map(e => {
-                      const r = e as ReceiptEntry
-                      const filename = r.imagePath?.split('/').pop() ?? 'vedlegg'
-                      const isPdf = filename.toLowerCase().endsWith('.pdf') || r.imageUrl?.includes('.pdf')
+                    {receiptFiles.map((f, i) => {
+                      const filename = f.path?.split('/').pop() ?? 'vedlegg'
+                      const isPdf = filename.toLowerCase().endsWith('.pdf') || f.url?.includes('.pdf')
                       return (
-                        <a key={e.id} href={r.imageUrl} target="_blank" rel="noopener noreferrer"
+                        <a key={`${f.entry.id}-${i}`} href={f.url} target="_blank" rel="noopener noreferrer"
                           className="flex items-start gap-2 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
                           <span className="text-xs font-mono text-slate-400 mt-0.5 shrink-0">{isPdf ? 'PDF' : 'IMG'}</span>
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-medium text-blue-600 truncate">{filename}</p>
-                            <p className="text-xs text-slate-400">{e.category.label} · {format(new Date(e.date), 'd. MMM yyyy', { locale: nb })}</p>
+                            <p className="text-xs text-slate-400">{f.entry.category.label} · {format(new Date(f.entry.date), 'd. MMM yyyy', { locale: nb })}</p>
                           </div>
                         </a>
                       )
@@ -1249,19 +1256,21 @@ function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit, getAm
                     <p><span className="font-medium">Beløp:</span> {(e as ReceiptEntry).amount?.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
                     <p><span className="font-medium">Kategori:</span> {e.category.label}</p>
                     {e.description && <p><span className="font-medium">Beskrivelse:</span> {e.description}</p>}
-                    {(e as ReceiptEntry).imageUrl && (
-                      (e as ReceiptEntry).imagePath?.endsWith('.pdf') ? (
-                        <a href={(e as ReceiptEntry).imageUrl} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs mt-1">
-                          Åpne PDF-kvittering
+                    {getImageUrls(e as ReceiptEntry).map((url, i) => {
+                      const paths = getImagePaths(e as ReceiptEntry)
+                      const isPdf = paths[i]?.endsWith('.pdf')
+                      return isPdf ? (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs mt-1 mr-3">
+                          Åpne PDF {getImageUrls(e as ReceiptEntry).length > 1 ? `(${i + 1})` : ''}
                         </a>
                       ) : (
-                        <a href={(e as ReceiptEntry).imageUrl} target="_blank" rel="noopener noreferrer">
-                          <img src={(e as ReceiptEntry).imageUrl} alt="Kvittering"
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          <img src={url} alt={`Kvittering ${i + 1}`}
                             className="mt-2 rounded-lg border border-slate-200 max-h-48 object-contain w-full" />
                         </a>
                       )
-                    )}
+                    })}
                   </div>
                 )}
                 <div className="flex justify-end gap-2">
