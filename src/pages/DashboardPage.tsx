@@ -53,11 +53,18 @@ const HK_AMOUNT_KEY = (y: number) => `hjemmekontor_amount_${y}`
 const HK_ID_KEY = (y: number) => `hjemmekontor_entry_id_${y}`
 const AV_AMOUNT_KEY = (y: number) => `avskrivninger_amount_${y}`
 const AV_ID_KEY = (y: number) => `avskrivninger_entry_id_${y}`
-const INCOME_AMOUNT_KEY = (y: number) => `income_amount_${y}`
-const INCOME_ID_KEY = (y: number) => `income_entry_id_${y}`
 
 const MONTHS = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
 const QUARTERS = ['Q1 (jan–mar)', 'Q2 (apr–jun)', 'Q3 (jul–sep)', 'Q4 (okt–des)']
+
+interface IncomeEntry {
+  id?: string
+  userId: string
+  amount: number
+  date: string
+  description: string
+  createdAt: number
+}
 
 function BackupModal({ years, downloadingZip, onBackup, onZip, onClose }: {
   years: number[]
@@ -248,6 +255,7 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [entries, setEntries] = useState<Entry[]>([])
+  const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState(() => parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -263,7 +271,9 @@ export default function DashboardPage() {
   const [savingHjemmekontor, setSavingHjemmekontor] = useState(false)
   const [avskrivningerAmt, setAvskrivningerAmt] = useState('')
   const [savingAvskrivninger, setSavingAvskrivninger] = useState(false)
-  const [incomeAmt, setIncomeAmt] = useState('')
+  // Income form
+  const [incomeAmount, setIncomeAmount] = useState('')
+  const [incomeDate, setIncomeDate] = useState(() => `${parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear()))}-${format(new Date(), 'MM-dd')}`)
   const [savingIncome, setSavingIncome] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
   const [showAltinn, setShowAltinn] = useState(false)
@@ -279,7 +289,7 @@ export default function DashboardPage() {
   useEffect(() => {
     setHjemmekontorAmt(localStorage.getItem(HK_AMOUNT_KEY(selectedYear)) || '')
     setAvskrivningerAmt(localStorage.getItem(AV_AMOUNT_KEY(selectedYear)) || '')
-    setIncomeAmt(localStorage.getItem(INCOME_AMOUNT_KEY(selectedYear)) || '')
+    setIncomeDate(`${selectedYear}-${format(new Date(), 'MM-dd')}`)
   }, [selectedYear])
 
   useEffect(() => {
@@ -297,6 +307,15 @@ export default function DashboardPage() {
     return unsub
   }, [user])
 
+  useEffect(() => {
+    if (!user) return
+    const q = query(collection(db, 'income'), where('userId', '==', user.uid))
+    return onSnapshot(q, snap => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as IncomeEntry))
+      data.sort((a, b) => b.date.localeCompare(a.date))
+      setIncomeEntries(data)
+    })
+  }, [user])
 
   function getAmount(entry: Entry): number {
     if (entry.entryType === 'receipt') return (entry as ReceiptEntry).amount
@@ -305,8 +324,9 @@ export default function DashboardPage() {
   }
 
   const yearEntries = entries.filter(r => r.date.startsWith(String(selectedYear)))
+  const yearIncome = incomeEntries.filter(r => r.date.startsWith(String(selectedYear)))
   const totalExpenses = yearEntries.reduce((sum, e) => sum + getAmount(e), 0)
-  const totalIncome = parseFloat(incomeAmt) || 0
+  const totalIncome = yearIncome.reduce((sum, e) => sum + e.amount, 0)
 
   async function handleDelete(entry: Entry) {
     if (!entry.id) return
@@ -319,26 +339,27 @@ export default function DashboardPage() {
     } catch (e) { console.error(e) }
   }
 
-  async function handleSaveIncome() {
-    if (!user) return
+  async function handleAddIncome(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user || !incomeAmount) return
     setSavingIncome(true)
-    const amount = parseFloat(incomeAmt) || 0
-    localStorage.setItem(INCOME_AMOUNT_KEY(selectedYear), String(amount))
-    const updateData = { amount, description: 'Inntekter (årsbeløp)' }
-    const existingId = localStorage.getItem(INCOME_ID_KEY(selectedYear))
-    if (existingId) {
-      try { await updateDoc(doc(db, 'income', existingId), updateData) }
-      catch {
-        if (amount > 0) {
-          const d = await addDoc(collection(db, 'income'), { userId: user.uid, date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-          localStorage.setItem(INCOME_ID_KEY(selectedYear), d.id)
-        }
-      }
-    } else if (amount > 0) {
-      const d = await addDoc(collection(db, 'income'), { userId: user.uid, date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-      localStorage.setItem(INCOME_ID_KEY(selectedYear), d.id)
-    }
-    setSavingIncome(false)
+    try {
+      await addDoc(collection(db, 'income'), {
+        userId: user.uid,
+        amount: parseFloat(incomeAmount),
+        date: incomeDate,
+        createdAt: Date.now(),
+      })
+      setIncomeAmount('')
+      setIncomeDate(`${selectedYear}-${format(new Date(), 'MM-dd')}`)
+    } catch (err) { console.error(err) }
+    finally { setSavingIncome(false) }
+  }
+
+  async function handleDeleteIncome(entry: IncomeEntry) {
+    if (!entry.id) return
+    if (!confirm('Slett inntekt?')) return
+    try { await deleteDoc(doc(db, 'income', entry.id)) } catch (e) { console.error(e) }
   }
 
   async function handleSaveHjemmekontor() {
@@ -436,7 +457,6 @@ export default function DashboardPage() {
         EKOM_PHONE_KEY(y), EKOM_INTERNET_KEY(y), EKOM_ID_KEY(y),
         HK_AMOUNT_KEY(y), HK_ID_KEY(y),
         AV_AMOUNT_KEY(y), AV_ID_KEY(y),
-        INCOME_AMOUNT_KEY(y), INCOME_ID_KEY(y),
       ]),
     ]
     const result: Record<string, string> = {}
@@ -520,6 +540,7 @@ export default function DashboardPage() {
   const currentYear = new Date().getFullYear()
   const years = Array.from(new Set([
     ...entries.map(e => parseInt(e.date.slice(0, 4))),
+    ...incomeEntries.map(e => parseInt(e.date.slice(0, 4))),
     currentYear,
     currentYear - 1,
     currentYear - 2,
@@ -533,7 +554,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.22</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.23</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -592,17 +613,37 @@ export default function DashboardPage() {
                   </span>
                 </button>
                 {showIncome && (
-                  <div className="mt-2">
-                    <p className="text-xs text-slate-400 mb-2">Årsbeløp registreres på post 3000</p>
-                    <div className="flex gap-2">
-                      <input type="number" value={incomeAmt} onChange={e => setIncomeAmt(e.target.value)}
-                        inputMode="decimal" min="0" step="1" placeholder="0"
-                        className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      <button onClick={handleSaveIncome} disabled={savingIncome}
-                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
-                        {savingIncome ? '...' : 'Lagre'}
-                      </button>
-                    </div>
+                  <div className="space-y-2 mt-2">
+                    <p className="text-xs text-slate-400 mb-1">Inntekter registreres på post 3000</p>
+                    <form onSubmit={handleAddIncome} className="space-y-2">
+                      <div className="flex gap-2">
+                        <input type="number" value={incomeAmount} onChange={e => setIncomeAmount(e.target.value)}
+                          inputMode="decimal" min="0" step="0.01" placeholder="Beløp" required
+                          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                        <button type="submit" disabled={savingIncome}
+                          className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm px-3 py-2 rounded-lg transition whitespace-nowrap">
+                          Legg til
+                        </button>
+                      </div>
+                      <input type="date" value={incomeDate} onChange={e => setIncomeDate(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </form>
+                    {yearIncome.length > 0 && (
+                      <div className="space-y-1 pt-1 border-t border-slate-100">
+                        {yearIncome.map(inc => (
+                          <div key={inc.id} className="flex items-center justify-between text-xs py-1">
+                            <div className="text-slate-600 flex-1 min-w-0">
+                              <span className="font-medium">{inc.amount.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+                              <span className="text-slate-300 ml-1">{format(new Date(inc.date), 'd. MMM', { locale: nb })}</span>
+                            </div>
+                            <button onClick={() => handleDeleteIncome(inc)} className="text-slate-300 hover:text-red-400 ml-2 shrink-0"><IconTrash /></button>
+                          </div>
+                        ))}
+                        <p className="text-xs font-semibold text-slate-700 pt-1 border-t border-slate-100">
+                          Total: {totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
