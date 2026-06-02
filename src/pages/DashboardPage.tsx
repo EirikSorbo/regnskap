@@ -114,7 +114,7 @@ function BackupModal({ years, downloadingZip, onBackup, onZip, onClose }: {
             </button>
             <button onClick={() => onZip(backupYear === 'alle' ? undefined : backupYear)} disabled={downloadingZip}
               className="w-full flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 disabled:opacity-50 transition text-left">
-              <IconArchive />
+              <IconOverview />
               <div>
                 <p className="text-sm font-medium text-slate-700">{downloadingZip ? 'Laster ned...' : 'Filer (ZIP)'}</p>
                 <p className="text-xs text-slate-400">Alle kvitteringsvedlegg{backupYear !== 'alle' ? ` for ${backupYear}` : ''}</p>
@@ -127,7 +127,7 @@ function BackupModal({ years, downloadingZip, onBackup, onZip, onClose }: {
               }}
               disabled={downloadingZip}
               className="w-full flex items-center gap-3 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl px-4 py-3 transition text-left">
-              <IconArchive />
+              <IconOverview />
               <div>
                 <p className="text-sm font-medium">Full backup (JSON + ZIP)</p>
                 <p className="text-xs text-white/60">Data og filer{backupYear !== 'alle' ? ` for ${backupYear}` : ''}</p>
