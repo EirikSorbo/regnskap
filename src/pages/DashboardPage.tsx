@@ -279,6 +279,7 @@ export default function DashboardPage() {
   const [showDrivingModal, setShowDrivingModal] = useState(false)
   const [showBackupModal, setShowBackupModal] = useState(false)
   const [importStatus, setImportStatus] = useState('')
+  const [importPending, setImportPending] = useState<{ file: File; data: any; attachmentFiles: { name: string; blob: Blob }[] } | null>(null)
   const [downloadingZip, setDownloadingZip] = useState(false)
 
   useEffect(() => { localStorage.setItem(RATE_KEY, String(ratePerKm)) }, [ratePerKm])
@@ -539,22 +540,21 @@ export default function DashboardPage() {
     URL.revokeObjectURL(a.href)
   }
 
-  async function handleImportBackup(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !user) return
+    e.target.value = ''
     setImportStatus('Leser fil...')
     try {
-      let data: { receipts?: unknown[]; income?: unknown[]; settings?: Record<string, string> }
+      let data: any
       let attachmentFiles: { name: string; blob: Blob }[] = []
 
       if (file.name.endsWith('.zip')) {
         const zip = await JSZip.loadAsync(file)
-        // Find the JSON file inside the ZIP
         const jsonFile = Object.keys(zip.files).find(f => f.endsWith('.json'))
         if (!jsonFile) { setImportStatus('Fant ingen JSON-fil i ZIP-filen.'); return }
         const jsonText = await zip.files[jsonFile].async('string')
         data = JSON.parse(jsonText)
-        // Collect attachment files from vedlegg/ folder
         for (const [path, zipEntry] of Object.entries(zip.files)) {
           if (zipEntry.dir) continue
           if (path.startsWith('vedlegg/')) {
@@ -562,21 +562,49 @@ export default function DashboardPage() {
             attachmentFiles.push({ name: path.replace('vedlegg/', ''), blob })
           }
         }
-        setImportStatus(`Lest ZIP: ${attachmentFiles.length} vedlegg funnet...`)
       } else {
         const text = await file.text()
         data = JSON.parse(text)
       }
 
       if (!data.receipts || !data.income) { setImportStatus('Ugyldig backup-fil.'); return }
-      setImportStatus('Sjekker duplikater...')
-      // Fetch existing IDs to avoid duplicates
+      const receiptsCount = (data.receipts as any[]).filter((r: any) => r.userId === user.uid).length
+      const incomeCount = (data.income as any[]).filter((r: any) => r.userId === user.uid).length
+      setImportStatus(`Fil lest: ${receiptsCount} utgifter, ${incomeCount} inntekter${attachmentFiles.length > 0 ? `, ${attachmentFiles.length} vedlegg` : ''}. Velg importmetode:`)
+      setImportPending({ file, data, attachmentFiles })
+    } catch (err) {
+      setImportStatus('Feil: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+
+  async function handleImportExecute(mode: 'merge' | 'restore') {
+    if (!user || !importPending) return
+    const { data, attachmentFiles } = importPending
+    setImportPending(null)
+    try {
       const [existingReceipts, existingIncome] = await Promise.all([
         getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid))),
         getDocs(query(collection(db, 'income'), where('userId', '==', user.uid))),
       ])
-      const existingReceiptIds = new Set(existingReceipts.docs.map(d => d.id))
-      const existingIncomeIds = new Set(existingIncome.docs.map(d => d.id))
+
+      // In restore mode, delete all existing data first
+      if (mode === 'restore') {
+        setImportStatus('Sletter eksisterende data...')
+        for (const d of existingReceipts.docs) {
+          const entry = d.data() as ReceiptEntry
+          for (const p of getImagePaths(entry)) {
+            try { await deleteObject(ref(storage, p)) } catch {}
+          }
+          await deleteDoc(doc(db, 'receipts', d.id))
+        }
+        for (const d of existingIncome.docs) {
+          await deleteDoc(doc(db, 'income', d.id))
+        }
+      }
+
+      const existingReceiptIds = mode === 'merge' ? new Set(existingReceipts.docs.map(d => d.id)) : new Set<string>()
+      const existingIncomeIds = mode === 'merge' ? new Set(existingIncome.docs.map(d => d.id)) : new Set<string>()
+
       setImportStatus('Importerer...')
       let count = 0
       let skipped = 0
@@ -594,23 +622,22 @@ export default function DashboardPage() {
         await addDoc(collection(db, 'income'), fields)
         count++
       }
-      // Upload attachment files from ZIP if present
+
       let filesUploaded = 0
       if (attachmentFiles.length > 0) {
         setImportStatus(`Laster opp ${attachmentFiles.length} vedlegg...`)
         for (const af of attachmentFiles) {
-          // Find matching receipt by imagePath ending
           const matchingReceipt = data.receipts?.find((r: any) => r.imagePath?.endsWith(af.name))
-          if (matchingReceipt && (matchingReceipt as any).imagePath) {
+          if (matchingReceipt && matchingReceipt.imagePath) {
             try {
-              const storageRef = ref(storage, (matchingReceipt as any).imagePath)
+              const storageRef = ref(storage, matchingReceipt.imagePath)
               await uploadBytes(storageRef, af.blob)
               filesUploaded++
             } catch (err) { console.warn('Vedlegg-feil:', af.name, err) }
           }
         }
       }
-      // Restore localStorage settings if present
+
       if (data.settings && typeof data.settings === 'object') {
         let settingsRestored = 0
         for (const [k, v] of Object.entries(data.settings)) {
@@ -618,14 +645,15 @@ export default function DashboardPage() {
         }
         if (settingsRestored > 0) { window.location.href = import.meta.env.BASE_URL; return }
       }
+
       const parts = [`${count} importert`]
       if (skipped > 0) parts.push(`${skipped} duplikater hoppet over`)
       if (filesUploaded > 0) parts.push(`${filesUploaded} vedlegg lastet opp`)
+      if (mode === 'restore') parts.unshift('Gjenopprettet')
       setImportStatus(`✓ ${parts.join(', ')}.`)
     } catch (err) {
       setImportStatus('Feil: ' + (err instanceof Error ? err.message : String(err)))
     }
-    e.target.value = ''
   }
 
   const currentYear = new Date().getFullYear()
@@ -645,7 +673,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.30</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.31</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -838,11 +866,11 @@ export default function DashboardPage() {
       {/* Overview drawer */}
       {showArchive && (
         <div className="fixed inset-0 z-50 flex">
-          <div className="flex-1 bg-black/30" onClick={() => { setShowArchive(false); setImportStatus('') }} />
+          <div className="flex-1 bg-black/30" onClick={() => { setShowArchive(false); setImportStatus(''); setImportPending(null) }} />
           <div className="w-80 bg-white h-full shadow-2xl flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <h2 className="text-base font-semibold text-slate-800">Oversikt</h2>
-              <button onClick={() => { setShowArchive(false); setImportStatus('') }} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
+              <button onClick={() => { setShowArchive(false); setImportStatus(''); setImportPending(null) }} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
 
@@ -872,16 +900,28 @@ export default function DashboardPage() {
               </div>
               <div className="border-t border-slate-100 pt-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Import</p>
-                <p className="text-xs text-slate-400 mb-3">Importer en tidligere backup-fil. Eksisterende data beholdes.</p>
+                <p className="text-xs text-slate-400 mb-3">Importer en tidligere backup-fil (JSON eller ZIP).</p>
                 <label className="w-full flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition cursor-pointer">
                   <IconUpload />
-                  <span>Importer backup (JSON)</span>
-                  <input type="file" accept=".json,.zip,application/json,application/zip" className="hidden" onChange={handleImportBackup} />
+                  <span>Velg backup-fil</span>
+                  <input type="file" accept=".json,.zip,application/json,application/zip" className="hidden" onChange={handleImportFile} />
                 </label>
                 {importStatus && (
                   <p className={`text-xs mt-2 px-1 ${importStatus.startsWith('✓') ? 'text-green-600' : importStatus.startsWith('Feil') ? 'text-red-500' : 'text-slate-400'}`}>
                     {importStatus}
                   </p>
+                )}
+                {importPending && (
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => handleImportExecute('merge')}
+                      className="flex-1 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
+                      Slå sammen
+                    </button>
+                    <button onClick={() => { if (confirm('Dette sletter ALL eksisterende data og erstatter med backup. Er du sikker?')) handleImportExecute('restore') }}
+                      className="flex-1 text-sm font-medium text-red-600 border border-red-300 rounded-lg px-3 py-2.5 hover:bg-red-50 transition">
+                      Gjenopprett
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
