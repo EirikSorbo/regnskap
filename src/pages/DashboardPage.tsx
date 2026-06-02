@@ -554,7 +554,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.25</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.26</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -882,84 +882,122 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Altinn modal */}
-      {showAltinn && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAltinn(false)} />
-          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
-              <h2 className="text-base font-semibold text-slate-800">Altinn-oversikt {selectedYear}</h2>
-              <button onClick={() => setShowAltinn(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <div className="rounded-none overflow-hidden text-sm">
-                {/* Income */}
-                <div className="flex items-center justify-between px-5 py-3 bg-green-50 border-b border-slate-100">
+      {/* Oversikt modal */}
+      {showAltinn && (() => {
+        const result = totalIncome - totalExpenses
+        const drivingEntries = yearEntries.filter(e => e.entryType === 'driving') as DrivingEntry[]
+        const totalKm = drivingEntries.reduce((s, d) => s + (d.tripType === 'return' ? d.distance * 2 : d.distance), 0)
+        const expenseCategories = [...CATEGORIES]
+          .filter(cat => cat.post !== '6000' && cat.post !== '7100')
+          .map(cat => ({ ...cat, sum: yearEntries.filter(e => e.category.post === cat.post).reduce((s, e) => s + getAmount(e), 0) }))
+        const hkSum = yearEntries.filter(e => e.category.post === '7100').reduce((s, e) => s + getAmount(e), 0)
+        const avSum = yearEntries.filter(e => e.category.post === '6000').reduce((s, e) => s + getAmount(e), 0)
+        const allCosts = [...expenseCategories, { post: '7100', label: 'Hjemmekontor', sum: hkSum }, { post: '6000', label: 'Avskrivninger', sum: avSum }]
+        const activeCosts = allCosts.filter(c => c.sum > 0)
+        const topCost = activeCosts.length > 0 ? activeCosts.reduce((a, b) => a.sum > b.sum ? a : b) : null
+        const fmt = (n: number) => n.toLocaleString('nb-NO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+
+        return (
+          <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAltinn(false)} />
+            <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+
+              {/* Header */}
+              <div className="bg-slate-800 text-white px-6 py-5 shrink-0">
+                <div className="flex items-center justify-between">
                   <div>
-                    <span className="font-semibold text-slate-700">Post 3000</span>
-                    <span className="text-slate-400 text-xs ml-2">Salgsinntekter</span>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Resultatrapport</p>
+                    <h2 className="text-xl font-bold mt-0.5">Sørbø Musikk — {selectedYear}</h2>
                   </div>
-                  <span className={`font-semibold tabular-nums ${totalIncome > 0 ? 'text-green-700' : 'text-slate-300'}`}>
-                    {totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                  </span>
+                  <button onClick={() => setShowAltinn(false)} className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/10 transition"><IconX /></button>
                 </div>
-                {/* All expense categories — always shown */}
-                {[...CATEGORIES].filter(cat => cat.post !== '6000' && cat.post !== '7100').map(cat => {
-                  const sum = yearEntries.filter(e => e.category.post === cat.post).reduce((s, e) => s + getAmount(e), 0)
-                  return (
-                    <div key={cat.post} className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-                      <div>
-                        <span className="font-semibold text-slate-700">Post {cat.post}</span>
-                        <span className="text-slate-400 text-xs ml-2">{cat.label}</span>
-                      </div>
-                      <span className={`font-semibold tabular-nums ${sum > 0 ? 'text-red-600' : 'text-slate-300'}`}>
-                        {sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                      </span>
-                    </div>
-                  )
-                })}
-                {/* Hjemmekontor */}
-                {(() => {
-                  const sum = yearEntries.filter(e => e.category.post === '7100').reduce((s, e) => s + getAmount(e), 0)
-                  return (
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-                      <div>
-                        <span className="font-semibold text-slate-700">Post 7100</span>
-                        <span className="text-slate-400 text-xs ml-2">Hjemmekontor</span>
-                      </div>
-                      <span className={`font-semibold tabular-nums ${sum > 0 ? 'text-red-600' : 'text-slate-300'}`}>
-                        {sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                      </span>
-                    </div>
-                  )
-                })()}
-                {/* Avskrivninger */}
-                {(() => {
-                  const sum = yearEntries.filter(e => e.category.post === '6000').reduce((s, e) => s + getAmount(e), 0)
-                  return (
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-                      <div>
-                        <span className="font-semibold text-slate-700">Post 6000</span>
-                        <span className="text-slate-400 text-xs ml-2">Avskrivninger (saldometoden 30%)</span>
-                      </div>
-                      <span className={`font-semibold tabular-nums ${sum > 0 ? 'text-red-600' : 'text-slate-300'}`}>
-                        {sum.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                      </span>
-                    </div>
-                  )
-                })()}
-                {/* Result */}
-                <div className="flex items-center justify-between px-5 py-4 bg-slate-50 border-t border-slate-200">
-                  <span className="text-sm font-semibold text-slate-600">Resultat (inntekt − utgifter)</span>
-                  <span className={`font-bold tabular-nums text-base ${totalIncome - totalExpenses >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    {(totalIncome - totalExpenses).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}
-                  </span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+
+                {/* KPI cards */}
+                <div className="grid grid-cols-3 gap-px bg-slate-100">
+                  <div className="bg-white px-4 py-4 text-center">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Inntekter</p>
+                    <p className="text-lg font-bold text-slate-800 mt-1 tabular-nums">{fmt(totalIncome)}</p>
+                  </div>
+                  <div className="bg-white px-4 py-4 text-center">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Utgifter</p>
+                    <p className="text-lg font-bold text-slate-800 mt-1 tabular-nums">{fmt(totalExpenses)}</p>
+                  </div>
+                  <div className="bg-white px-4 py-4 text-center">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Resultat</p>
+                    <p className={`text-lg font-bold mt-1 tabular-nums ${result >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(result)}</p>
+                  </div>
                 </div>
+
+                {/* Quick stats */}
+                <div className="px-6 py-4 bg-slate-50 border-y border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <span>{yearEntries.length} oppføringer</span>
+                  <span>{drivingEntries.length} kjøreturer · {totalKm.toLocaleString('nb-NO')} km</span>
+                  {topCost && <span>Største post: {topCost.label}</span>}
+                </div>
+
+                {/* Income section */}
+                <div className="px-6 pt-5 pb-2">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Inntekter</p>
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-mono text-slate-300">3000</span>
+                      <span className="text-sm text-slate-700">Salgsinntekter</span>
+                    </div>
+                    <span className={`text-sm font-semibold tabular-nums ${totalIncome > 0 ? 'text-green-600' : 'text-slate-300'}`}>
+                      {fmt(totalIncome)} kr
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mx-6 border-t border-slate-100" />
+
+                {/* Expenses section */}
+                <div className="px-6 pt-4 pb-2">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Driftskostnader</p>
+                  <div className="space-y-0.5">
+                    {allCosts.map(cat => (
+                      <div key={cat.post} className={`flex items-center justify-between py-1.5 ${cat.sum === 0 ? 'opacity-30' : ''}`}>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs font-mono text-slate-300">{cat.post}</span>
+                          <span className="text-sm text-slate-700">{cat.label}</span>
+                        </div>
+                        <span className={`text-sm tabular-nums ${cat.sum > 0 ? 'font-semibold text-slate-700' : 'text-slate-300'}`}>
+                          {fmt(cat.sum)} kr
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Sum expenses */}
+                  <div className="flex items-center justify-between py-2.5 mt-2 border-t border-slate-200">
+                    <span className="text-sm font-semibold text-slate-600">Sum driftskostnader</span>
+                    <span className="text-sm font-bold tabular-nums text-slate-800">{fmt(totalExpenses)} kr</span>
+                  </div>
+                </div>
+
+                {/* Result bar */}
+                <div className={`mx-4 mb-4 rounded-xl px-5 py-4 ${result >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Driftsresultat {selectedYear}</p>
+                      {totalIncome > 0 && (
+                        <p className="text-[11px] text-slate-400 mt-0.5">Margin: {(result / totalIncome * 100).toFixed(0)} %</p>
+                      )}
+                    </div>
+                    <span className={`text-2xl font-bold tabular-nums ${result >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {fmt(result)} kr
+                    </span>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Receipt list modal */}
       {showReceiptList && (
