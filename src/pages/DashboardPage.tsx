@@ -32,7 +32,7 @@ function IconCar() {
 
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc, getDocs } from 'firebase/firestore'
-import { ref, deleteObject, getBlob } from 'firebase/storage'
+import { ref, deleteObject, getBlob, uploadBytes } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
 import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
@@ -542,8 +542,30 @@ export default function DashboardPage() {
     if (!file || !user) return
     setImportStatus('Leser fil...')
     try {
-      const text = await file.text()
-      const data = JSON.parse(text)
+      let data: { receipts?: unknown[]; income?: unknown[]; settings?: Record<string, string> }
+      let attachmentFiles: { name: string; blob: Blob }[] = []
+
+      if (file.name.endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(file)
+        // Find the JSON file inside the ZIP
+        const jsonFile = Object.keys(zip.files).find(f => f.endsWith('.json'))
+        if (!jsonFile) { setImportStatus('Fant ingen JSON-fil i ZIP-filen.'); return }
+        const jsonText = await zip.files[jsonFile].async('string')
+        data = JSON.parse(jsonText)
+        // Collect attachment files from vedlegg/ folder
+        for (const [path, zipEntry] of Object.entries(zip.files)) {
+          if (zipEntry.dir) continue
+          if (path.startsWith('vedlegg/')) {
+            const blob = await zipEntry.async('blob')
+            attachmentFiles.push({ name: path.replace('vedlegg/', ''), blob })
+          }
+        }
+        setImportStatus(`Lest ZIP: ${attachmentFiles.length} vedlegg funnet...`)
+      } else {
+        const text = await file.text()
+        data = JSON.parse(text)
+      }
+
       if (!data.receipts || !data.income) { setImportStatus('Ugyldig backup-fil.'); return }
       setImportStatus('Sjekker duplikater...')
       // Fetch existing IDs to avoid duplicates
@@ -556,21 +578,37 @@ export default function DashboardPage() {
       setImportStatus('Importerer...')
       let count = 0
       let skipped = 0
-      for (const r of data.receipts) {
+      for (const r of data.receipts as any[]) {
         const { id, ...fields } = r
         if (fields.userId !== user.uid) continue
         if (id && existingReceiptIds.has(id)) { skipped++; continue }
         await addDoc(collection(db, 'receipts'), fields)
         count++
       }
-      for (const inc of data.income) {
+      for (const inc of data.income as any[]) {
         const { id, ...fields } = inc
         if (fields.userId !== user.uid) continue
         if (id && existingIncomeIds.has(id)) { skipped++; continue }
         await addDoc(collection(db, 'income'), fields)
         count++
       }
-      // Restore localStorage settings if present (only if not overwriting existing)
+      // Upload attachment files from ZIP if present
+      let filesUploaded = 0
+      if (attachmentFiles.length > 0) {
+        setImportStatus(`Laster opp ${attachmentFiles.length} vedlegg...`)
+        for (const af of attachmentFiles) {
+          // Find matching receipt by imagePath ending
+          const matchingReceipt = data.receipts?.find((r: any) => r.imagePath?.endsWith(af.name))
+          if (matchingReceipt && (matchingReceipt as any).imagePath) {
+            try {
+              const storageRef = ref(storage, (matchingReceipt as any).imagePath)
+              await uploadBytes(storageRef, af.blob)
+              filesUploaded++
+            } catch (err) { console.warn('Vedlegg-feil:', af.name, err) }
+          }
+        }
+      }
+      // Restore localStorage settings if present
       if (data.settings && typeof data.settings === 'object') {
         let settingsRestored = 0
         for (const [k, v] of Object.entries(data.settings)) {
@@ -578,7 +616,10 @@ export default function DashboardPage() {
         }
         if (settingsRestored > 0) window.location.reload()
       }
-      setImportStatus(`✓ ${count} importert${skipped > 0 ? `, ${skipped} duplikater hoppet over` : ''}.`)
+      const parts = [`${count} importert`]
+      if (skipped > 0) parts.push(`${skipped} duplikater hoppet over`)
+      if (filesUploaded > 0) parts.push(`${filesUploaded} vedlegg lastet opp`)
+      setImportStatus(`✓ ${parts.join(', ')}.`)
     } catch (err) {
       setImportStatus('Feil: ' + (err instanceof Error ? err.message : String(err)))
     }
@@ -602,7 +643,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.27</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.28</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -833,7 +874,7 @@ export default function DashboardPage() {
                 <label className="w-full flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition cursor-pointer">
                   <IconUpload />
                   <span>Importer backup (JSON)</span>
-                  <input type="file" accept=".json,application/json" className="hidden" onChange={handleImportBackup} />
+                  <input type="file" accept=".json,.zip,application/json,application/zip" className="hidden" onChange={handleImportBackup} />
                 </label>
                 {importStatus && (
                   <p className={`text-xs mt-2 px-1 ${importStatus.startsWith('✓') ? 'text-green-600' : importStatus.startsWith('Feil') ? 'text-red-500' : 'text-slate-400'}`}>
