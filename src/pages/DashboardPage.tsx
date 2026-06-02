@@ -1005,8 +1005,30 @@ export default function DashboardPage() {
 
         {/* Summary card */}
         <div className="bg-blue-600 text-white rounded-2xl p-5">
-          <p className="text-sm text-blue-100">Totale utgifter {selectedYear}</p>
-          <p className="text-3xl font-bold mt-1">{totalExpenses.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
+          {totalIncome > 0 ? (
+            <>
+              <p className="text-sm text-blue-100">Regnskap {selectedYear}</p>
+              <div className="mt-3 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-blue-100">Inntekter</span>
+                  <span className="text-sm font-semibold">{totalIncome.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-blue-100">Utgifter</span>
+                  <span className="text-sm font-semibold">−{totalExpenses.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+                </div>
+                <div className="border-t border-white/20 pt-1.5 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-blue-100">Resultat</span>
+                  <span className="text-xl font-bold">{(totalIncome - totalExpenses).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-blue-100">Totale utgifter {selectedYear}</p>
+              <p className="text-3xl font-bold mt-1">{totalExpenses.toLocaleString('nb-NO', { style: 'currency', currency: 'NOK' })}</p>
+            </>
+          )}
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-blue-200">{yearEntries.length} oppføringer</p>
             <button onClick={() => navigate('/add')}
