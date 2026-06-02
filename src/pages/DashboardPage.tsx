@@ -66,11 +66,12 @@ interface IncomeEntry {
   createdAt: number
 }
 
-function BackupModal({ years, downloadingZip, onBackup, onZip, onClose }: {
+function BackupModal({ years, downloadingZip, onBackup, onZip, onFullBackup, onClose }: {
   years: number[]
   downloadingZip: boolean
   onBackup: (year?: number) => void
   onZip: (year?: number) => void
+  onFullBackup: (year?: number) => void
   onClose: () => void
 }) {
   const [backupYear, setBackupYear] = useState<number | 'alle'>('alle')
@@ -121,10 +122,7 @@ function BackupModal({ years, downloadingZip, onBackup, onZip, onClose }: {
               </div>
             </button>
             <button
-              onClick={async () => {
-                const year = backupYear === 'alle' ? undefined : backupYear
-                await Promise.all([onBackup(year), onZip(year)])
-              }}
+              onClick={() => onFullBackup(backupYear === 'alle' ? undefined : backupYear)}
               disabled={downloadingZip}
               className="w-full flex items-center gap-3 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl px-4 py-3 transition text-left">
               <IconOverview />
@@ -467,6 +465,56 @@ export default function DashboardPage() {
     return result
   }
 
+  async function handleFullBackup(yearFilter?: number) {
+    if (!user || downloadingZip) return
+    setDownloadingZip(true)
+    try {
+      const [receiptSnap, incomeSnap] = await Promise.all([
+        getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid))),
+        getDocs(query(collection(db, 'income'), where('userId', '==', user.uid))),
+      ])
+      const filterFn = (d: { date?: string }) => !yearFilter || d.date?.startsWith(String(yearFilter))
+      const receipts = receiptSnap.docs.map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string; date?: string }))
+      const jsonData = {
+        exportedAt: new Date().toISOString(),
+        year: yearFilter ?? 'alle',
+        receipts: receipts.filter(filterFn),
+        income: incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
+        settings: yearFilter ? undefined : exportLocalSettings(),
+      }
+      const zip = new JSZip()
+      zip.file(`regnskap_backup_${yearFilter ?? 'alle'}_${format(new Date(), 'yyyy-MM-dd')}.json`, JSON.stringify(jsonData, null, 2))
+      const withFiles = receipts.filter(e => e.imagePath && filterFn(e))
+      let added = 0
+      const errors: string[] = []
+      for (const e of withFiles) {
+        const name = e.imagePath.split('/').pop()!
+        try {
+          const blob = await Promise.race([
+            getBlob(ref(storage, e.imagePath)),
+            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+          ])
+          zip.file(`vedlegg/${name}`, blob)
+          added++
+        } catch (err) {
+          console.warn('Feil:', name, err)
+          errors.push(name)
+        }
+      }
+      const content = await zip.generateAsync({ type: 'blob' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(content)
+      a.download = `regnskap_full_backup_${yearFilter ?? 'alle'}_${format(new Date(), 'yyyy-MM-dd')}.zip`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      if (errors.length > 0) alert(`${added} vedlegg lastet ned. ${errors.length} feilet:\n${errors.join('\n')}`)
+    } catch (err) {
+      alert('Feil: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setDownloadingZip(false)
+    }
+  }
+
   async function handleBackup(yearFilter?: number) {
     if (!user) return
     const [receiptSnap, incomeSnap] = await Promise.all([
@@ -554,7 +602,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.26</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.27</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -809,6 +857,7 @@ export default function DashboardPage() {
           downloadingZip={downloadingZip}
           onBackup={handleBackup}
           onZip={handleDownloadZip}
+          onFullBackup={handleFullBackup}
           onClose={() => setShowBackupModal(false)}
         />
       )}
