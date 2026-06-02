@@ -122,8 +122,8 @@ function BackupModal({ years, downloadingZip, onBackup, onZip, onClose }: {
             </button>
             <button
               onClick={async () => {
-                await onBackup(backupYear === 'alle' ? undefined : backupYear)
-                await onZip(backupYear === 'alle' ? undefined : backupYear)
+                const year = backupYear === 'alle' ? undefined : backupYear
+                await Promise.all([onBackup(year), onZip(year)])
               }}
               disabled={downloadingZip}
               className="w-full flex items-center gap-3 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl px-4 py-3 transition text-left">
@@ -554,7 +554,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.24</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.25</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
