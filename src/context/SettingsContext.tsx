@@ -15,6 +15,7 @@ export interface UserSettings {
   avskrivningerAmounts: Record<string, number>
   avskrivningerEntryIds: Record<string, string>
   lastBackupAt?: number  // timestamp of last full backup
+  postNumbersMigrated?: boolean
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {

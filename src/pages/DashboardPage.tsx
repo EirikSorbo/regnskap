@@ -305,6 +305,28 @@ export default function DashboardPage() {
     return unsub
   }, [user])
 
+  // One-time migration: update old post numbers
+  useEffect(() => {
+    if (!user || settings.postNumbersMigrated) return
+    const POST_MAP: Record<string, { post: string; label: string }> = {
+      '7400': { post: '7490', label: 'Kontingenter / fagforeninger' },
+      '6800': { post: '7140', label: 'Reise og mat' },
+      '7100': { post: '7770', label: 'Hjemmekontor' },
+    }
+    getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid))).then(async snap => {
+      let migrated = 0
+      for (const d of snap.docs) {
+        const oldPost = d.data().category?.post
+        if (oldPost && POST_MAP[oldPost]) {
+          await updateDoc(doc(db, 'receipts', d.id), { category: POST_MAP[oldPost] })
+          migrated++
+        }
+      }
+      await updateSettings({ postNumbersMigrated: true })
+      if (migrated > 0) console.log(`Migrert ${migrated} oppføringer til nye postnumre`)
+    })
+  }, [user, settings.postNumbersMigrated])
+
   useEffect(() => {
     if (!user) return
     const q = query(collection(db, 'income'), where('userId', '==', user.uid))
@@ -692,7 +714,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.41</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.42</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
