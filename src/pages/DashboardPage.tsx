@@ -624,14 +624,16 @@ export default function DashboardPage() {
       let skipped = 0
       for (const r of data.receipts as any[]) {
         const { id, ...fields } = r
-        if (fields.userId !== user.uid) continue
+        if (fields.userId && fields.userId !== user.uid) continue
+        fields.userId = user.uid
         if (id && existingReceiptIds.has(id)) { skipped++; continue }
         await addDoc(collection(db, 'receipts'), fields)
         count++
       }
       for (const inc of data.income as any[]) {
         const { id, ...fields } = inc
-        if (fields.userId !== user.uid) continue
+        if (fields.userId && fields.userId !== user.uid) continue
+        fields.userId = user.uid
         if (id && existingIncomeIds.has(id)) { skipped++; continue }
         await addDoc(collection(db, 'income'), fields)
         count++
@@ -689,7 +691,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.36</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.37</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
