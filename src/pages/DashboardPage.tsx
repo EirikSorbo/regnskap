@@ -673,7 +673,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.31</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.32</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -880,6 +880,15 @@ export default function DashboardPage() {
                   className="w-full flex items-center justify-between text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl px-4 py-3 transition">
                   <span>Oversikt {selectedYear}</span>
                   <span className="text-white/70 text-base">→</span>
+                </button>
+              </div>
+
+              {/* Report button */}
+              <div>
+                <button onClick={() => { setShowArchive(false); navigate(`/rapport?year=${selectedYear}`) }}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition">
+                  <span>Årsrapport {selectedYear}</span>
+                  <span className="text-slate-400 text-xs font-normal">PDF →</span>
                 </button>
               </div>
 
