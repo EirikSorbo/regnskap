@@ -409,31 +409,47 @@ export default function DashboardPage() {
     setSavingAvskrivninger(false)
   }
 
+  function buildAttachmentMap(filteredEntries: Entry[]) {
+    let idx = 1
+    const map: { path: string; stdName: string }[] = []
+    for (const cat of CATEGORIES) {
+      const catEntries = filteredEntries
+        .filter(e => e.category.post === cat.post && e.entryType === 'receipt')
+        .sort((a, b) => a.date.localeCompare(b.date)) as ReceiptEntry[]
+      for (const r of catEntries) {
+        for (const p of getImagePaths(r)) {
+          const ext = p.split('.').pop()?.toLowerCase() || 'jpg'
+          map.push({ path: p, stdName: `${cat.post}-${r.date}-${String(idx++).padStart(3, '0')}.${ext}` })
+        }
+      }
+    }
+    return map
+  }
+
   async function handleDownloadZip(yearFilter?: number) {
     if (!user || downloadingZip) return
     setDownloadingZip(true)
     try {
       const snap = await getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid)))
       const allEntries = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as ReceiptEntry & { id: string }))
+        .map(d => ({ id: d.id, ...d.data() } as Entry))
         .filter(e => (!yearFilter || e.date?.startsWith(String(yearFilter))))
-      const allPaths = allEntries.flatMap(e => getImagePaths(e))
-      if (allPaths.length === 0) { alert('Ingen vedlegg funnet.'); return }
+      const attMap = buildAttachmentMap(allEntries)
+      if (attMap.length === 0) { alert('Ingen vedlegg funnet.'); return }
       const zip = new JSZip()
       let added = 0
       const errors: string[] = []
-      for (const path of allPaths) {
-        const name = path.split('/').pop()!
+      for (const att of attMap) {
         try {
           const blob = await Promise.race([
-            getBlob(ref(storage, path)),
+            getBlob(ref(storage, att.path)),
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
           ])
-          zip.file(name, blob)
+          zip.file(att.stdName, blob)
           added++
         } catch (err) {
-          console.warn('Feil:', name, err)
-          errors.push(name)
+          console.warn('Feil:', att.stdName, err)
+          errors.push(att.stdName)
         }
       }
       if (added === 0) { alert(`Ingen filer lastet ned.\n\nFeil:\n${errors.join('\n')}`); return }
@@ -487,21 +503,23 @@ export default function DashboardPage() {
       }
       const zip = new JSZip()
       zip.file(`regnskap_backup_${yearFilter ?? 'alle'}_${format(new Date(), 'yyyy-MM-dd')}.json`, JSON.stringify(jsonData, null, 2))
-      const allPaths = receipts.filter(filterFn).flatMap(e => getImagePaths(e))
+      const filteredEntries = receiptSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Entry))
+        .filter(e => filterFn(e as { date?: string }))
+      const attMap = buildAttachmentMap(filteredEntries)
       let added = 0
       const errors: string[] = []
-      for (const path of allPaths) {
-        const name = path.split('/').pop()!
+      for (const att of attMap) {
         try {
           const blob = await Promise.race([
-            getBlob(ref(storage, path)),
+            getBlob(ref(storage, att.path)),
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
           ])
-          zip.file(`vedlegg/${name}`, blob)
+          zip.file(`vedlegg/${att.stdName}`, blob)
           added++
         } catch (err) {
-          console.warn('Feil:', name, err)
-          errors.push(name)
+          console.warn('Feil:', att.stdName, err)
+          errors.push(att.stdName)
         }
       }
       const content = await zip.generateAsync({ type: 'blob' })
@@ -673,7 +691,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.32</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.33</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">

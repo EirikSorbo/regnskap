@@ -109,9 +109,12 @@ export default function AddReceiptPage() {
         const imageUrls = [...existingImageUrls]
         const imagePaths = [...existingImagePaths]
         if (files.length > 0) {
-          const monthStr = format(new Date(date), 'MM')
-          for (const f of files) {
-            const path = `receipts/${user.uid}/${categoryPost}_${monthStr}_${f.name}`
+          const existingCount = existingImagePaths.length
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i]
+            const ext = f.name.split('.').pop()?.toLowerCase() || 'jpg'
+            const idx = String(existingCount + i + 1).padStart(3, '0')
+            const path = `receipts/${user.uid}/${categoryPost}-${date}-${idx}.${ext}`
             const storageRef = ref(storage, path)
             await uploadBytes(storageRef, f)
             const url = await getDownloadURL(storageRef)
