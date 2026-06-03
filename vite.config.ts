@@ -15,8 +15,8 @@ export default defineConfig({
         clientsClaim: true,
       },
       manifest: {
-        name: 'Fiken - Regnskapsapp',
-        short_name: 'Fiken',
+        name: 'Regnskap',
+        short_name: 'Regnskap',
         description: 'Enkel regnskapsapp for enkeltpersonforetak',
         theme_color: '#2563eb',
         background_color: '#ffffff',

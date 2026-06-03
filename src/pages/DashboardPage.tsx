@@ -714,7 +714,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.43</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.44</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
