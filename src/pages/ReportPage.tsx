@@ -13,6 +13,12 @@ import { nb } from 'date-fns/locale'
 const RATE_KEY = 'driving_rate_per_km'
 const RATE_PASS_KEY = 'driving_rate_per_passenger_km'
 const YEAR_KEY = 'selected_year'
+const EKOM_PHONE_KEY = (y: number) => `ekom_phone_${y}`
+const EKOM_INTERNET_KEY = (y: number) => `ekom_internet_${y}`
+const EKOM_PRIVATE_AMT_KEY = 'ekom_private_amt'
+
+const MONTHS = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
+const QUARTERS = ['Q1 (jan–mar)', 'Q2 (apr–jun)', 'Q3 (jul–sep)', 'Q4 (okt–des)']
 
 function fmt(n: number) {
   return n.toLocaleString('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -42,6 +48,19 @@ export default function ReportPage() {
   const year = parseInt(searchParams.get('year') || localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear()))
   const ratePerKm = parseFloat(localStorage.getItem(RATE_KEY) || '3.50')
   const ratePerPassengerKm = parseFloat(localStorage.getItem(RATE_PASS_KEY) || '1.00')
+
+  // EKOM data
+  let phoneMonths: number[] = Array(12).fill(0)
+  let internetQuarters: number[] = Array(4).fill(0)
+  try { phoneMonths = JSON.parse(localStorage.getItem(EKOM_PHONE_KEY(year)) || 'null') || Array(12).fill(0) } catch { /* keep defaults */ }
+  try { internetQuarters = JSON.parse(localStorage.getItem(EKOM_INTERNET_KEY(year)) || 'null') || Array(4).fill(0) } catch { /* keep defaults */ }
+  const privateAmt = parseFloat(localStorage.getItem(EKOM_PRIVATE_AMT_KEY) || '0')
+  const totalPhone = phoneMonths.reduce((s, v) => s + (Number(v) || 0), 0)
+  const totalInternet = internetQuarters.reduce((s, v) => s + (Number(v) || 0), 0)
+  const totalGross = totalPhone + totalInternet
+  const ekomDeduction = Math.min(privateAmt, totalGross)
+  const ekomNet = Math.round((totalGross - ekomDeduction) * 100) / 100
+  const hasEkom = totalGross > 0
 
   const [entries, setEntries] = useState<Entry[]>([])
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
@@ -202,6 +221,7 @@ export default function ReportPage() {
         {/* === POST DETAIL PAGES === */}
         {postGroups.map(group => {
           const isDriving = group.cat.post === '7080'
+          const isEkom = group.cat.post === '7500'
           return (
             <div key={group.cat.post} className="page-break-after">
               <div className="pt-8 pb-8">
@@ -213,14 +233,82 @@ export default function ReportPage() {
                       <h2 className="text-2xl font-bold text-slate-800 mt-1">{group.cat.label}</h2>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-slate-400">{group.entries.length} oppføring{group.entries.length !== 1 ? 'er' : ''}</p>
+                      {!isEkom && <p className="text-xs text-slate-400">{group.entries.length} oppføring{group.entries.length !== 1 ? 'er' : ''}</p>}
                       <p className="text-xl font-bold text-slate-800 tabular-nums mt-0.5">{fmt(group.sum)} kr</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Entries table */}
-                {isDriving ? (
+                {/* EKOM detail */}
+                {isEkom && hasEkom ? (
+                  <>
+                    {/* Phone per month */}
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Telefon — månedlige kostnader</h3>
+                    <table className="w-full text-sm mb-6">
+                      <thead>
+                        <tr className="border-b-2 border-slate-200">
+                          <th className="text-left py-2 font-semibold text-slate-600">Måned</th>
+                          <th className="text-right py-2 font-semibold text-slate-600">Beløp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {MONTHS.map((m, i) => (
+                          <tr key={i} className={`border-b border-slate-100 ${phoneMonths[i] === 0 ? 'opacity-30' : ''}`}>
+                            <td className="py-1.5 text-slate-700">{m}</td>
+                            <td className="py-1.5 text-right tabular-nums text-slate-800">{fmt(phoneMonths[i] || 0)} kr</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-300">
+                          <td className="py-2 font-semibold text-slate-600">Sum telefon</td>
+                          <td className="py-2 text-right tabular-nums font-bold text-slate-800">{fmt(totalPhone)} kr</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+
+                    {/* Internet per quarter */}
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Internett — kvartalsvise kostnader</h3>
+                    <table className="w-full text-sm mb-6">
+                      <thead>
+                        <tr className="border-b-2 border-slate-200">
+                          <th className="text-left py-2 font-semibold text-slate-600">Kvartal</th>
+                          <th className="text-right py-2 font-semibold text-slate-600">Beløp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {QUARTERS.map((q, i) => (
+                          <tr key={i} className={`border-b border-slate-100 ${internetQuarters[i] === 0 ? 'opacity-30' : ''}`}>
+                            <td className="py-1.5 text-slate-700">{q}</td>
+                            <td className="py-1.5 text-right tabular-nums text-slate-800">{fmt(internetQuarters[i] || 0)} kr</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-300">
+                          <td className="py-2 font-semibold text-slate-600">Sum internett</td>
+                          <td className="py-2 text-right tabular-nums font-bold text-slate-800">{fmt(totalInternet)} kr</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+
+                    {/* EKOM summary */}
+                    <div className="bg-slate-50 rounded-lg px-5 py-4 text-sm space-y-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Sum telefon + internett</span>
+                        <span className="tabular-nums font-medium text-slate-800">{fmt(totalGross)} kr</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Privatandel (fratrekk)</span>
+                        <span className="tabular-nums font-medium text-red-600">−{fmt(ekomDeduction)} kr</span>
+                      </div>
+                      <div className="flex justify-between border-t border-slate-200 pt-1.5">
+                        <span className="font-semibold text-slate-700">Fradrag post 7500</span>
+                        <span className="tabular-nums font-bold text-slate-800">{fmt(ekomNet)} kr</span>
+                      </div>
+                    </div>
+                  </>
+                ) : isDriving ? (
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b-2 border-slate-200">
