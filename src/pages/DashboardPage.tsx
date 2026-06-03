@@ -525,6 +525,7 @@ export default function DashboardPage() {
       a.click()
       URL.revokeObjectURL(a.href)
       if (errors.length > 0) alert(`${added} vedlegg lastet ned. ${errors.length} feilet:\n${errors.join('\n')}`)
+      await updateSettings({ lastBackupAt: Date.now() })
     } catch (err) {
       alert('Feil: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -691,7 +692,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.37</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.38</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -1240,6 +1241,28 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
+
+        {/* Backup reminder */}
+        {(() => {
+          const lastBackup = settings.lastBackupAt
+          const daysSince = lastBackup ? Math.floor((Date.now() - lastBackup) / (1000 * 60 * 60 * 24)) : null
+          const needsBackup = !lastBackup || daysSince! >= 30
+          if (!needsBackup) return null
+          return (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-amber-800">
+                  {lastBackup ? `${daysSince} dager siden siste backup` : 'Ingen backup registrert'}
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">Anbefalt: månedlig full backup</p>
+              </div>
+              <button onClick={() => { setShowArchive(true); setShowBackupModal(true) }}
+                className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+                Backup nå
+              </button>
+            </div>
+          )
+        })()}
 
         {/* Quick-add shortcuts */}
         <div className="flex gap-2">

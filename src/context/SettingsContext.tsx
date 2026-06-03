@@ -14,6 +14,7 @@ export interface UserSettings {
   hjemmekontorEntryIds: Record<string, string>
   avskrivningerAmounts: Record<string, number>
   avskrivningerEntryIds: Record<string, string>
+  lastBackupAt?: number  // timestamp of last full backup
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
