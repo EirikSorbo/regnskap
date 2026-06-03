@@ -60,7 +60,6 @@ export default function ReportPage() {
   const totalGross = totalPhone + totalInternet
   const ekomDeduction = Math.min(privateAmt, totalGross)
   const ekomNet = Math.round((totalGross - ekomDeduction) * 100) / 100
-  const hasEkom = totalGross > 0
 
   const [entries, setEntries] = useState<Entry[]>([])
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
@@ -240,7 +239,7 @@ export default function ReportPage() {
                 </div>
 
                 {/* EKOM detail */}
-                {isEkom && hasEkom ? (
+                {isEkom ? (
                   <>
                     {/* Phone per month */}
                     <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Telefon — månedlige kostnader</h3>
