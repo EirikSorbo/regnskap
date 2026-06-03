@@ -54,13 +54,13 @@ export const CATEGORIES: Category[] = [
   DRIVING_CATEGORY,
   { post: '7166', label: 'Forsikringer' },
   { post: '7500', label: 'Telefon & internett / EKOM' },
-  { post: '6800', label: 'Reise og mat' },
+  { post: '7140', label: 'Reise og mat' },
   { post: '4500', label: 'Lønn til andre' },
-  { post: '7400', label: 'Kontingenter / fagforeninger' },
+  { post: '7490', label: 'Kontingenter / fagforeninger' },
   { post: '6695', label: 'Reparasjoner' },
   { post: '6000', label: 'Avskrivninger (saldometoden 30%)' },
   { post: '6590', label: 'Leie av lokale / utstyr' },
-  { post: '7100', label: 'Hjemmekontor' },
+  { post: '7770', label: 'Hjemmekontor' },
   { post: '7700', label: 'Annen driftskostnad' },
 ]
 

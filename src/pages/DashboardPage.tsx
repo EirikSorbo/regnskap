@@ -367,7 +367,7 @@ export default function DashboardPage() {
     setSavingHjemmekontor(true)
     const ys = String(selectedYear)
     const amount = parseFloat(hjemmekontorAmt) || 0
-    const category = CATEGORIES.find(c => c.post === '7100')!
+    const category = CATEGORIES.find(c => c.post === '7770')!
     const updateData = { amount, category, description: 'Hjemmekontor fradrag' }
     const existingId = settings.hjemmekontorEntryIds[ys]
     let entryId = existingId
@@ -692,7 +692,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.40</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.41</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -1048,11 +1048,11 @@ export default function DashboardPage() {
         const drivingEntries = yearEntries.filter(e => e.entryType === 'driving') as DrivingEntry[]
         const totalKm = drivingEntries.reduce((s, d) => s + (d.tripType === 'return' ? d.distance * 2 : d.distance), 0)
         const expenseCategories = [...CATEGORIES]
-          .filter(cat => cat.post !== '6000' && cat.post !== '7100')
+          .filter(cat => cat.post !== '6000' && cat.post !== '7770')
           .map(cat => ({ ...cat, sum: yearEntries.filter(e => e.category.post === cat.post).reduce((s, e) => s + getAmount(e), 0) }))
-        const hkSum = yearEntries.filter(e => e.category.post === '7100').reduce((s, e) => s + getAmount(e), 0)
+        const hkSum = yearEntries.filter(e => e.category.post === '7770').reduce((s, e) => s + getAmount(e), 0)
         const avSum = yearEntries.filter(e => e.category.post === '6000').reduce((s, e) => s + getAmount(e), 0)
-        const allCosts = [...expenseCategories, { post: '7100', label: 'Hjemmekontor', sum: hkSum }, { post: '6000', label: 'Avskrivninger', sum: avSum }]
+        const allCosts = [...expenseCategories, { post: '7770', label: 'Hjemmekontor', sum: hkSum }, { post: '6000', label: 'Avskrivninger', sum: avSum }]
         const activeCosts = allCosts.filter(c => c.sum > 0)
         const topCost = activeCosts.length > 0 ? activeCosts.reduce((a, b) => a.sum > b.sum ? a : b) : null
         const fmt = (n: number) => n.toLocaleString('nb-NO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
