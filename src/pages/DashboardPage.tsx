@@ -36,23 +36,14 @@ import { ref, deleteObject, getBlob, uploadBytes } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
 import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
+import { useSettings, convertLegacySettings } from '../context/SettingsContext'
 import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount, getImageUrls, getImagePaths } from '../types'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { signOut } from 'firebase/auth'
 
-const RATE_KEY = 'driving_rate_per_km'
-const RATE_PASS_KEY = 'driving_rate_per_passenger_km'
 const YEAR_KEY = 'selected_year'
-const EKOM_PHONE_KEY = (y: number) => `ekom_phone_${y}`
-const EKOM_INTERNET_KEY = (y: number) => `ekom_internet_${y}`
-const EKOM_PRIVATE_AMT_KEY = 'ekom_private_amt'
-const EKOM_ID_KEY = (y: number) => `ekom_entry_id_${y}`
-const HK_AMOUNT_KEY = (y: number) => `hjemmekontor_amount_${y}`
-const HK_ID_KEY = (y: number) => `hjemmekontor_entry_id_${y}`
-const AV_AMOUNT_KEY = (y: number) => `avskrivninger_amount_${y}`
-const AV_ID_KEY = (y: number) => `avskrivninger_entry_id_${y}`
 
 const MONTHS = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
 const QUARTERS = ['Q1 (jan–mar)', 'Q2 (apr–jun)', 'Q3 (jul–sep)', 'Q4 (okt–des)']
@@ -139,13 +130,11 @@ function BackupModal({ years, downloadingZip, onBackup, onZip, onFullBackup, onC
 }
 
 function EkomModal({ userId, year, onClose }: { userId: string; year: number; onClose: () => void }) {
-  const [phoneMonths, setPhoneMonths] = useState<number[]>(() => {
-    try { return JSON.parse(localStorage.getItem(EKOM_PHONE_KEY(year)) || 'null') || Array(12).fill(0) } catch { return Array(12).fill(0) }
-  })
-  const [internetQuarters, setInternetQuarters] = useState<number[]>(() => {
-    try { return JSON.parse(localStorage.getItem(EKOM_INTERNET_KEY(year)) || 'null') || Array(4).fill(0) } catch { return Array(4).fill(0) }
-  })
-  const [privateAmt, setPrivateAmt] = useState(() => parseFloat(localStorage.getItem(EKOM_PRIVATE_AMT_KEY) || '0'))
+  const { settings, updateSettings } = useSettings()
+  const ys = String(year)
+  const [phoneMonths, setPhoneMonths] = useState<number[]>(settings.ekomPhone[ys] || Array(12).fill(0))
+  const [internetQuarters, setInternetQuarters] = useState<number[]>(settings.ekomInternet[ys] || Array(4).fill(0))
+  const [privateAmt, setPrivateAmt] = useState(settings.ekomPrivateAmt)
   const [saving, setSaving] = useState(false)
 
   const totalPhone = phoneMonths.reduce((s, v) => s + (Number(v) || 0), 0)
@@ -163,22 +152,26 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
 
   async function handleSave() {
     setSaving(true)
-    localStorage.setItem(EKOM_PHONE_KEY(year), JSON.stringify(phoneMonths))
-    localStorage.setItem(EKOM_INTERNET_KEY(year), JSON.stringify(internetQuarters))
-    localStorage.setItem(EKOM_PRIVATE_AMT_KEY, String(privateAmt))
     const category = CATEGORIES.find(c => c.post === '7500')!
     const updateData = { amount: netAmount, category, description: 'EKOM-beregning (automatisk)' }
-    const existingId = localStorage.getItem(EKOM_ID_KEY(year))
+    const existingId = settings.ekomEntryIds[ys]
+    let entryId = existingId
     if (existingId) {
       try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
       catch {
         const d = await addDoc(collection(db, 'receipts'), { userId, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${year}-12-31`, createdAt: Date.now(), ...updateData })
-        localStorage.setItem(EKOM_ID_KEY(year), d.id)
+        entryId = d.id
       }
     } else {
       const d = await addDoc(collection(db, 'receipts'), { userId, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${year}-12-31`, createdAt: Date.now(), ...updateData })
-      localStorage.setItem(EKOM_ID_KEY(year), d.id)
+      entryId = d.id
     }
+    await updateSettings({
+      ekomPhone: { ...settings.ekomPhone, [ys]: phoneMonths },
+      ekomInternet: { ...settings.ekomInternet, [ys]: internetQuarters },
+      ekomPrivateAmt: parseFloat(String(privateAmt)) || 0,
+      ekomEntryIds: { ...settings.ekomEntryIds, [ys]: entryId },
+    })
     setSaving(false)
     onClose()
   }
@@ -251,14 +244,15 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { settings, updateSettings } = useSettings()
   const navigate = useNavigate()
   const [entries, setEntries] = useState<Entry[]>([])
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState(() => parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [ratePerKm, setRatePerKm] = useState(() => parseFloat(localStorage.getItem(RATE_KEY) || '3.50'))
-  const [ratePerPassengerKm, setRatePerPassengerKm] = useState(() => parseFloat(localStorage.getItem(RATE_PASS_KEY) || '1.00'))
+  const [ratePerKm, setRatePerKm] = useState(settings.drivingRatePerKm)
+  const [ratePerPassengerKm, setRatePerPassengerKm] = useState(settings.drivingRatePerPassengerKm)
   const [showSettings, setShowSettings] = useState(false)
   const [showEkomModal, setShowEkomModal] = useState(false)
   const [showIncome, setShowIncome] = useState(false)
@@ -282,14 +276,19 @@ export default function DashboardPage() {
   const [importPending, setImportPending] = useState<{ file: File; data: any; attachmentFiles: { name: string; blob: Blob }[] } | null>(null)
   const [downloadingZip, setDownloadingZip] = useState(false)
 
-  useEffect(() => { localStorage.setItem(RATE_KEY, String(ratePerKm)) }, [ratePerKm])
-  useEffect(() => { localStorage.setItem(RATE_PASS_KEY, String(ratePerPassengerKm)) }, [ratePerPassengerKm])
+  // Sync settings from Firestore → local state
+  useEffect(() => { setRatePerKm(settings.drivingRatePerKm) }, [settings.drivingRatePerKm])
+  useEffect(() => { setRatePerPassengerKm(settings.drivingRatePerPassengerKm) }, [settings.drivingRatePerPassengerKm])
+  // Save rates to Firestore on change
+  useEffect(() => { if (ratePerKm !== settings.drivingRatePerKm) updateSettings({ drivingRatePerKm: ratePerKm }) }, [ratePerKm])
+  useEffect(() => { if (ratePerPassengerKm !== settings.drivingRatePerPassengerKm) updateSettings({ drivingRatePerPassengerKm: ratePerPassengerKm }) }, [ratePerPassengerKm])
   useEffect(() => { localStorage.setItem(YEAR_KEY, String(selectedYear)) }, [selectedYear])
   useEffect(() => {
-    setHjemmekontorAmt(localStorage.getItem(HK_AMOUNT_KEY(selectedYear)) || '')
-    setAvskrivningerAmt(localStorage.getItem(AV_AMOUNT_KEY(selectedYear)) || '')
+    const ys = String(selectedYear)
+    setHjemmekontorAmt(String(settings.hjemmekontorAmounts[ys] || ''))
+    setAvskrivningerAmt(String(settings.avskrivningerAmounts[ys] || ''))
     setIncomeDate(`${selectedYear}-${format(new Date(), 'MM-dd')}`)
-  }, [selectedYear])
+  }, [selectedYear, settings.hjemmekontorAmounts, settings.avskrivningerAmounts])
 
   useEffect(() => {
     if (!user) return
@@ -366,46 +365,56 @@ export default function DashboardPage() {
   async function handleSaveHjemmekontor() {
     if (!user) return
     setSavingHjemmekontor(true)
+    const ys = String(selectedYear)
     const amount = parseFloat(hjemmekontorAmt) || 0
-    localStorage.setItem(HK_AMOUNT_KEY(selectedYear), String(amount))
     const category = CATEGORIES.find(c => c.post === '7100')!
     const updateData = { amount, category, description: 'Hjemmekontor fradrag' }
-    const existingId = localStorage.getItem(HK_ID_KEY(selectedYear))
+    const existingId = settings.hjemmekontorEntryIds[ys]
+    let entryId = existingId
     if (existingId) {
       try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
       catch {
         if (amount > 0) {
           const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-          localStorage.setItem(HK_ID_KEY(selectedYear), d.id)
+          entryId = d.id
         }
       }
     } else if (amount > 0) {
       const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-      localStorage.setItem(HK_ID_KEY(selectedYear), d.id)
+      entryId = d.id
     }
+    await updateSettings({
+      hjemmekontorAmounts: { ...settings.hjemmekontorAmounts, [ys]: amount },
+      hjemmekontorEntryIds: { ...settings.hjemmekontorEntryIds, [ys]: entryId || '' },
+    })
     setSavingHjemmekontor(false)
   }
 
   async function handleSaveAvskrivninger() {
     if (!user) return
     setSavingAvskrivninger(true)
+    const ys = String(selectedYear)
     const amount = parseFloat(avskrivningerAmt) || 0
-    localStorage.setItem(AV_AMOUNT_KEY(selectedYear), String(amount))
     const category = CATEGORIES.find(c => c.post === '6000')!
     const updateData = { amount, category, description: 'Avskrivninger (automatisk)' }
-    const existingId = localStorage.getItem(AV_ID_KEY(selectedYear))
+    const existingId = settings.avskrivningerEntryIds[ys]
+    let entryId = existingId
     if (existingId) {
       try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
       catch {
         if (amount > 0) {
           const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-          localStorage.setItem(AV_ID_KEY(selectedYear), d.id)
+          entryId = d.id
         }
       }
     } else if (amount > 0) {
       const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-      localStorage.setItem(AV_ID_KEY(selectedYear), d.id)
+      entryId = d.id
     }
+    await updateSettings({
+      avskrivningerAmounts: { ...settings.avskrivningerAmounts, [ys]: amount },
+      avskrivningerEntryIds: { ...settings.avskrivningerEntryIds, [ys]: entryId || '' },
+    })
     setSavingAvskrivninger(false)
   }
 
@@ -467,21 +476,8 @@ export default function DashboardPage() {
     }
   }
 
-  function exportLocalSettings(): Record<string, string> {
-    const keys = [
-      RATE_KEY, RATE_PASS_KEY, EKOM_PRIVATE_AMT_KEY,
-      ...years.flatMap(y => [
-        EKOM_PHONE_KEY(y), EKOM_INTERNET_KEY(y), EKOM_ID_KEY(y),
-        HK_AMOUNT_KEY(y), HK_ID_KEY(y),
-        AV_AMOUNT_KEY(y), AV_ID_KEY(y),
-      ]),
-    ]
-    const result: Record<string, string> = {}
-    for (const k of keys) {
-      const v = localStorage.getItem(k)
-      if (v !== null) result[k] = v
-    }
-    return result
+  function exportSettings() {
+    return { ...settings }
   }
 
   async function handleFullBackup(yearFilter?: number) {
@@ -499,7 +495,7 @@ export default function DashboardPage() {
         year: yearFilter ?? 'alle',
         receipts: receipts.filter(filterFn),
         income: incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
-        settings: yearFilter ? undefined : exportLocalSettings(),
+        settings: yearFilter ? undefined : exportSettings(),
       }
       const zip = new JSZip()
       zip.file(`regnskap_backup_${yearFilter ?? 'alle'}_${format(new Date(), 'yyyy-MM-dd')}.json`, JSON.stringify(jsonData, null, 2))
@@ -548,7 +544,7 @@ export default function DashboardPage() {
       year: yearFilter ?? 'alle',
       receipts: receiptSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
       income: incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
-      settings: yearFilter ? undefined : exportLocalSettings(),
+      settings: yearFilter ? undefined : exportSettings(),
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
@@ -657,11 +653,13 @@ export default function DashboardPage() {
       }
 
       if (data.settings && typeof data.settings === 'object') {
-        let settingsRestored = 0
-        for (const [k, v] of Object.entries(data.settings)) {
-          if (typeof v === 'string') { localStorage.setItem(k, v); settingsRestored++ }
+        // Detect old localStorage format vs new Firestore format
+        const isLegacy = 'driving_rate_per_km' in data.settings
+        if (isLegacy) {
+          await updateSettings(convertLegacySettings(data.settings))
+        } else {
+          await updateSettings(data.settings)
         }
-        if (settingsRestored > 0) { window.location.href = import.meta.env.BASE_URL; return }
       }
 
       const parts = [`${count} importert`]
@@ -691,7 +689,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.35</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.36</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">

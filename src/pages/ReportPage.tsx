@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   type Entry, type ReceiptEntry, type DrivingEntry,
@@ -10,12 +11,7 @@ import {
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 
-const RATE_KEY = 'driving_rate_per_km'
-const RATE_PASS_KEY = 'driving_rate_per_passenger_km'
 const YEAR_KEY = 'selected_year'
-const EKOM_PHONE_KEY = (y: number) => `ekom_phone_${y}`
-const EKOM_INTERNET_KEY = (y: number) => `ekom_internet_${y}`
-const EKOM_PRIVATE_AMT_KEY = 'ekom_private_amt'
 
 const MONTHS = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
 const QUARTERS = ['Q1 (jan–mar)', 'Q2 (apr–jun)', 'Q3 (jul–sep)', 'Q4 (okt–des)']
@@ -45,16 +41,16 @@ export default function ReportPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { settings } = useSettings()
   const year = parseInt(searchParams.get('year') || localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear()))
-  const ratePerKm = parseFloat(localStorage.getItem(RATE_KEY) || '3.50')
-  const ratePerPassengerKm = parseFloat(localStorage.getItem(RATE_PASS_KEY) || '1.00')
+  const ys = String(year)
+  const ratePerKm = settings.drivingRatePerKm
+  const ratePerPassengerKm = settings.drivingRatePerPassengerKm
 
-  // EKOM data
-  let phoneMonths: number[] = Array(12).fill(0)
-  let internetQuarters: number[] = Array(4).fill(0)
-  try { phoneMonths = JSON.parse(localStorage.getItem(EKOM_PHONE_KEY(year)) || 'null') || Array(12).fill(0) } catch { /* keep defaults */ }
-  try { internetQuarters = JSON.parse(localStorage.getItem(EKOM_INTERNET_KEY(year)) || 'null') || Array(4).fill(0) } catch { /* keep defaults */ }
-  const privateAmt = parseFloat(localStorage.getItem(EKOM_PRIVATE_AMT_KEY) || '0')
+  // EKOM data from Firestore settings
+  const phoneMonths = settings.ekomPhone[ys] || Array(12).fill(0)
+  const internetQuarters = settings.ekomInternet[ys] || Array(4).fill(0)
+  const privateAmt = settings.ekomPrivateAmt
   const totalPhone = phoneMonths.reduce((s, v) => s + (Number(v) || 0), 0)
   const totalInternet = internetQuarters.reduce((s, v) => s + (Number(v) || 0), 0)
   const totalGross = totalPhone + totalInternet
