@@ -18,5 +18,22 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Firebase-datalaget bygger på onSnapshot: setState kalles ASYNKRONT når
+      // et snapshot kommer, ikke synkront i selve effekten. Regelen kan ikke se
+      // det og gir falske positiver på hver realtime-lytter. Vi slår den av
+      // bevisst (mønsteret er korrekt og idiomatisk).
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
+  {
+    // Context-filene samlokaliserer bevisst Provider-komponenten med sin hook og
+    // konstanter (standard React-mønster). Fast-refresh-regelen vil ha dem i egne
+    // filer; her er ekstra indireksjon ikke verdt det. Regelen står fortsatt på
+    // for resten av appen (sider/komponenter).
+    files: ['src/context/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ])

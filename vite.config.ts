@@ -5,6 +5,21 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: '/regnskap/',
+  build: {
+    rollupOptions: {
+      output: {
+        // Skill ut de tunge, sjelden-endrede bibliotekene i egne vendor-chunks,
+        // så app-koden og Firebase/React caches hver for seg mellom oppdateringer.
+        // rolldown-vite tar kun funksjonsformen av manualChunks.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('/firebase/') || id.includes('/@firebase/')) return 'firebase'
+          if (id.includes('/react-router') || id.includes('/react-dom/') ||
+              id.includes('/react/') || id.includes('/scheduler/')) return 'react'
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),

@@ -34,7 +34,6 @@ import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, setDoc, updateDoc, getDocs } from 'firebase/firestore'
 import { ref, deleteObject, getBlob, uploadBytes } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
-import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
 import { useSettings, convertLegacySettings, type UserSettings } from '../context/SettingsContext'
 import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, drivingAmount, calcEkom, getImageUrls, getImagePaths } from '../types'
@@ -319,8 +318,13 @@ export default function DashboardPage() {
   // Sync settings from Firestore → local state
   useEffect(() => { setRatePerKm(settings.drivingRatePerKm) }, [settings.drivingRatePerKm])
   useEffect(() => { setRatePerPassengerKm(settings.drivingRatePerPassengerKm) }, [settings.drivingRatePerPassengerKm])
-  // Save rates to Firestore on change
+  // Skriv satsene til Firestore når BRUKEREN endrer dem. Bevisst kun [ratePerKm]
+  // i dep-lista: å ta med settings.drivingRatePerKm ville fyrt effekten når
+  // synk-ned-effekten over oppdaterer state, altså en skrive-løkke. Vakten
+  // (!==) hindrer skriving når verdien alt er lik Firestore.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (ratePerKm !== settings.drivingRatePerKm) updateSettings({ drivingRatePerKm: ratePerKm }) }, [ratePerKm])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (ratePerPassengerKm !== settings.drivingRatePerPassengerKm) updateSettings({ drivingRatePerPassengerKm: ratePerPassengerKm }) }, [ratePerPassengerKm])
   useEffect(() => { localStorage.setItem(YEAR_KEY, String(selectedYear)) }, [selectedYear])
   useEffect(() => {
@@ -365,6 +369,9 @@ export default function DashboardPage() {
       await updateSettings({ postNumbersMigrated: true })
       if (migrated > 0) console.log(`Migrert ${migrated} oppføringer til nye postnumre`)
     })
+    // updateSettings bevisst utelatt fra deps: engangs-migrering, styrt av
+    // postNumbersMigrated-flagget — å ta den med endrer ingenting.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, settings.postNumbersMigrated])
 
   useEffect(() => {
@@ -494,6 +501,8 @@ export default function DashboardPage() {
         .filter(e => (!yearFilter || e.date?.startsWith(String(yearFilter))))
       const attMap = buildAttachmentMap(allEntries)
       if (attMap.length === 0) { alert('Ingen vedlegg funnet.'); return }
+      // Lastes dynamisk: jszip trengs bare til backup/import, ikke ved oppstart.
+      const { default: JSZip } = await import('jszip')
       const zip = new JSZip()
       let added = 0
       const errors: string[] = []
@@ -546,6 +555,7 @@ export default function DashboardPage() {
         income: incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as { date?: string })).filter(filterFn),
         settings: yearFilter ? undefined : exportSettings(),
       }
+      const { default: JSZip } = await import('jszip')
       const zip = new JSZip()
       zip.file(`regnskap_backup_${yearFilter ?? 'alle'}_${format(new Date(), 'yyyy-MM-dd')}.json`, JSON.stringify(jsonData, null, 2))
       const filteredEntries = receiptSnap.docs
@@ -614,6 +624,7 @@ export default function DashboardPage() {
       const attachmentFiles: { name: string; blob: Blob }[] = []
 
       if (file.name.endsWith('.zip')) {
+        const { default: JSZip } = await import('jszip')
         const zip = await JSZip.loadAsync(file)
         const jsonFile = Object.keys(zip.files).find(f => f.endsWith('.json'))
         if (!jsonFile) { setImportStatus('Fant ingen JSON-fil i ZIP-filen.'); return }
@@ -751,7 +762,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.45</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.46</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
