@@ -36,7 +36,7 @@ import { ref, deleteObject, getBlob, uploadBytes } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings, convertLegacySettings, type UserSettings } from '../context/SettingsContext'
-import { type Entry, type ReceiptEntry, type DrivingEntry, type Category, CATEGORIES, SYSTEM_POSTS, SETTINGS_MANAGED_POSTS, drivingAmount, calcEkom, filterEntries, managedPostAmount, getImageUrls, getImagePaths } from '../types'
+import { type Entry, type ReceiptEntry, type DrivingEntry, type Category, type Asset, CATEGORIES, SYSTEM_POSTS, SETTINGS_MANAGED_POSTS, drivingAmount, calcEkom, filterEntries, managedPostAmount, saldoDepreciation, saldoBalance, entriesToCsv, getImageUrls, getImagePaths } from '../types'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -74,12 +74,13 @@ interface BackupData {
 }
 
 
-function BackupModal({ years, downloadingZip, onBackup, onZip, onFullBackup, onClose }: {
+function BackupModal({ years, downloadingZip, onBackup, onZip, onFullBackup, onCsv, onClose }: {
   years: number[]
   downloadingZip: boolean
   onBackup: (year?: number) => void
   onZip: (year?: number) => void
   onFullBackup: (year?: number) => void
+  onCsv: (year?: number) => void
   onClose: () => void
 }) {
   const [backupYear, setBackupYear] = useState<number | 'alle'>('alle')
@@ -127,6 +128,14 @@ function BackupModal({ years, downloadingZip, onBackup, onZip, onFullBackup, onC
               <div>
                 <p className="text-sm font-medium text-slate-700">{downloadingZip ? 'Laster ned...' : 'Filer (ZIP)'}</p>
                 <p className="text-xs text-slate-400">Alle kvitteringsvedlegg{backupYear !== 'alle' ? ` for ${backupYear}` : ''}</p>
+              </div>
+            </button>
+            <button onClick={() => onCsv(backupYear === 'alle' ? undefined : backupYear)}
+              className="w-full flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition text-left">
+              <IconUpload />
+              <div>
+                <p className="text-sm font-medium text-slate-700">Utgifter (CSV)</p>
+                <p className="text-xs text-slate-400">Regneark for regnskapsfører{backupYear !== 'alle' ? ` for ${backupYear}` : ''}</p>
               </div>
             </button>
             <button
@@ -308,6 +317,75 @@ function CategoryEditor({ categories, usedPosts, onSave }: {
       <button onClick={save} disabled={saving || !dirty}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm py-2 rounded-lg transition">
         {saving ? 'Lagrer…' : 'Lagre kategorier'}
+      </button>
+    </div>
+  )
+}
+
+// Driftsmiddel-register for saldoavskrivning (post 6000). Registrer instrumenter/
+// utstyr som avskrives; appen regner ut årets saldoavskrivning automatisk. Har du
+// minst ett driftsmiddel, styrer registeret post 6000 (ellers det manuelle beløpet).
+function AssetEditor({ assets, year, onSave }: {
+  assets: Asset[]
+  year: number
+  onSave: (a: Asset[]) => Promise<void>
+}) {
+  const [draft, setDraft] = useState<Asset[]>(assets)
+  const [nName, setNName] = useState('')
+  const [nYear, setNYear] = useState(String(year))
+  const [nCost, setNCost] = useState('')
+  const [nRate, setNRate] = useState('30')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const dirty = JSON.stringify(draft) !== JSON.stringify(assets)
+  const inp = 'border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+
+  function add() {
+    const name = nName.trim(), yr = parseInt(nYear, 10), cost = parseFloat(nCost) || 0
+    const rate = (parseFloat(nRate) || 0) / 100
+    if (!name || !Number.isFinite(yr) || cost <= 0) { setMsg('Fyll inn navn, år og kostpris (> 0).'); return }
+    setDraft(d => [...d, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name, year: yr, cost, rate: rate > 0 && rate < 1 ? rate : 0.30 }])
+    setNName(''); setNCost(''); setMsg('')
+  }
+  async function save() {
+    setSaving(true)
+    try { await onSave(draft); setMsg('Lagret ✓'); setTimeout(() => setMsg(''), 2000) }
+    catch (e) { setMsg('Feil: ' + (e instanceof Error ? e.message : String(e))) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+      <p className="text-xs font-medium text-slate-500">Driftsmiddel-register</p>
+      <p className="text-xs text-slate-400">Registrer instrumenter/utstyr som avskrives — appen regner saldoavskrivningen automatisk (styrer da post 6000).</p>
+      {draft.length > 0 && (
+        <div className="space-y-1.5">
+          {draft.map((a, i) => (
+            <div key={a.id} className="flex items-center gap-2 text-sm">
+              <div className="flex-1 min-w-0">
+                <p className="text-slate-700 truncate">{a.name}</p>
+                <p className="text-xs text-slate-400">{a.year} · {a.cost.toLocaleString('nb-NO')} kr · {Math.round(a.rate * 100)} %</p>
+              </div>
+              <button type="button" onClick={() => setDraft(d => d.filter((_, j) => j !== i))} className="text-slate-300 hover:text-red-400 shrink-0"><IconTrash /></button>
+            </div>
+          ))}
+          <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs flex justify-between">
+            <span className="text-slate-500">Avskrivning {year} · restsaldo</span>
+            <span className="font-semibold text-slate-700">{saldoDepreciation(draft, year).toLocaleString('nb-NO')} · {saldoBalance(draft, year).toLocaleString('nb-NO')} kr</span>
+          </div>
+        </div>
+      )}
+      <input value={nName} onChange={e => setNName(e.target.value)} placeholder="Navn (f.eks. gitar)" className={`w-full ${inp}`} />
+      <div className="flex items-center gap-2">
+        <input value={nYear} onChange={e => setNYear(e.target.value)} placeholder="År" inputMode="numeric" className={`w-16 ${inp}`} />
+        <input value={nCost} onChange={e => setNCost(e.target.value)} placeholder="Kostpris" inputMode="decimal" className={`flex-1 ${inp}`} />
+        <input value={nRate} onChange={e => setNRate(e.target.value)} placeholder="Sats %" inputMode="numeric" title="Saldosats i prosent (gruppe d = 30)" className={`w-16 ${inp}`} />
+        <button type="button" onClick={add} title="Legg til driftsmiddel" className="text-blue-600 hover:text-blue-700 shrink-0"><IconPlus /></button>
+      </div>
+      {msg && <p className={`text-xs ${/Feil|Fyll/.test(msg) ? 'text-red-500' : 'text-green-600'}`}>{msg}</p>}
+      <button onClick={save} disabled={saving || !dirty}
+        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm py-2 rounded-lg transition">
+        {saving ? 'Lagrer…' : 'Lagre driftsmidler'}
       </button>
     </div>
   )
@@ -667,6 +745,21 @@ export default function DashboardPage() {
     URL.revokeObjectURL(a.href)
   }
 
+  function handleCsv(yearFilter?: number) {
+    // Utgiftsoppføringer (kvittering + kjøring), uten de settings-styrte postene.
+    const list = entries
+      .filter(e => (!yearFilter || e.date.startsWith(String(yearFilter))) && !SETTINGS_MANAGED_POSTS.includes(e.category.post))
+      .sort((a, b) => a.date.localeCompare(b.date))
+    if (!list.length) { alert('Ingen utgiftsoppføringer å eksportere.'); return }
+    // BOM så Excel leser æøå riktig.
+    const blob = new Blob(['﻿' + entriesToCsv(list, getAmount)], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `regnskap_utgifter_${yearFilter ?? 'alle'}_${format(new Date(), 'yyyy-MM-dd')}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -815,7 +908,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.47</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.48</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -990,6 +1083,10 @@ export default function DashboardPage() {
                         {savingAvskrivninger ? '...' : 'Lagre'}
                       </button>
                     </div>
+                    {(settings.assets?.length ?? 0) > 0 && (
+                      <p className="text-xs text-amber-600 mt-2">Driftsmiddel-registeret nedenfor styrer post 6000. Det manuelle beløpet over brukes bare hvis registeret er tomt.</p>
+                    )}
+                    <AssetEditor assets={settings.assets ?? []} year={selectedYear} onSave={(a) => updateSettings({ assets: a })} />
                   </div>
                 )}
               </div>
@@ -1111,6 +1208,7 @@ export default function DashboardPage() {
           onBackup={handleBackup}
           onZip={handleDownloadZip}
           onFullBackup={handleFullBackup}
+          onCsv={handleCsv}
           onClose={() => setShowBackupModal(false)}
         />
       )}
@@ -1396,17 +1494,22 @@ export default function DashboardPage() {
           const daysSince = lastBackup ? Math.floor((Date.now() - lastBackup) / (1000 * 60 * 60 * 24)) : null
           const needsBackup = !lastBackup || daysSince! >= 30
           if (!needsBackup) return null
+          // Eskalerer: rødt/mer insisterende når det er lenge siden (eller aldri).
+          const urgent = !lastBackup || daysSince! >= 60
+          const c = urgent
+            ? { box: 'bg-red-50 border-red-200', title: 'text-red-800', sub: 'text-red-600', btn: 'bg-red-600 hover:bg-red-700' }
+            : { box: 'bg-amber-50 border-amber-200', title: 'text-amber-800', sub: 'text-amber-600', btn: 'bg-amber-600 hover:bg-amber-700' }
           return (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <div className={`${c.box} border rounded-xl px-4 py-3 flex items-center justify-between gap-3`}>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-amber-800">
+                <p className={`text-sm font-medium ${c.title}`}>
                   {lastBackup ? `${daysSince} dager siden siste backup` : 'Ingen backup registrert'}
                 </p>
-                <p className="text-xs text-amber-600 mt-0.5">Anbefalt: månedlig full backup</p>
+                <p className={`text-xs ${c.sub} mt-0.5`}>{urgent ? 'Ta en full backup nå — bilagene er din eneste sikring.' : 'Anbefalt: månedlig full backup'}</p>
               </div>
-              <button onClick={() => { setShowArchive(true); setShowBackupModal(true) }}
-                className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
-                Backup nå
+              <button onClick={() => handleFullBackup()} disabled={downloadingZip}
+                className={`shrink-0 ${c.btn} disabled:opacity-60 text-white text-xs font-semibold px-3 py-2 rounded-lg transition`}>
+                {downloadingZip ? 'Laster…' : 'Backup nå'}
               </button>
             </div>
           )

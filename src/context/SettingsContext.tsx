@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from './AuthContext'
-import { CATEGORIES, type Category } from '../types'
+import { CATEGORIES, type Category, type Asset } from '../types'
 
 export interface UserSettings {
   drivingRatePerKm: number
@@ -16,6 +16,7 @@ export interface UserSettings {
   avskrivningerAmounts: Record<string, number>
   avskrivningerEntryIds: Record<string, string>
   categories?: Category[]  // brukerens redigerbare kontoplan; default = CATEGORIES
+  assets?: Asset[]  // driftsmiddel-register for saldoavskrivning (post 6000)
   lastBackupAt?: number  // timestamp of last full backup
   postNumbersMigrated?: boolean
   shadowReceiptsRemoved?: boolean  // engangs-migrering: skjulte EKOM/HK/avskr.-kvitteringer slettet

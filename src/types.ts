@@ -147,6 +147,7 @@ export interface ManagedSettings {
   ekomPrivateAmt: number
   hjemmekontorAmounts: Record<string, number>
   avskrivningerAmounts: Record<string, number>
+  assets?: Asset[]
 }
 
 /** Årsbeløpet for en settings-styrt post (SETTINGS_MANAGED_POSTS), utledet fra
@@ -158,7 +159,12 @@ export function managedPostAmount(post: string, s: ManagedSettings, year: number
   const ys = String(year)
   if (post === '7500') return calcEkom(s.ekomPhone[ys] || [], s.ekomInternet[ys] || [], s.ekomPrivateAmt).net
   if (post === '7770') return s.hjemmekontorAmounts[ys] || 0
-  if (post === '6000') return s.avskrivningerAmounts[ys] || 0
+  if (post === '6000') {
+    // Har brukeren et driftsmiddel-register, beregnes avskrivningen (saldometode)
+    // fra det. Ellers faller vi tilbake til det manuelt inntastede årsbeløpet.
+    const assets = s.assets ?? []
+    return assets.length ? saldoDepreciation(assets, year) : (s.avskrivningerAmounts[ys] || 0)
+  }
   return null
 }
 
@@ -204,4 +210,63 @@ export function parseReceiptText(text: string): { amount?: number; date?: string
   const candidate = pool.length ? Math.max(...pool) : undefined
   if (candidate != null && candidate > 0) out.amount = Math.round(candidate * 100) / 100
   return out
+}
+
+// ---------------------------------------------------------------------------
+//  DRIFTSMIDLER / SALDOAVSKRIVNING (post 6000)
+// ---------------------------------------------------------------------------
+
+export interface Asset {
+  id: string
+  name: string
+  year: number   // anskaffelsesår
+  cost: number   // kostpris = avskrivningsgrunnlag ved anskaffelse
+  rate: number   // saldosats (f.eks. 0.30 for saldogruppe d)
+}
+
+/** Årets saldoavskrivning summert over alle driftsmidler. Per driftsmiddel er
+ *  avskrivningen i år Y = kostpris · sats · (1−sats)^(Y−anskaffelsesår) for
+ *  Y ≥ anskaffelsesår (degressiv saldo). Uten avgang er dette identisk med å føre
+ *  én felles gruppesaldo. Avrundet til hele kroner. */
+export function saldoDepreciation(assets: Asset[], year: number): number {
+  let total = 0
+  for (const a of assets) {
+    const rate = a.rate > 0 && a.rate < 1 ? a.rate : 0.30
+    const cost = Number(a.cost) || 0
+    if (!Number.isFinite(a.year) || year < a.year || cost <= 0) continue
+    total += cost * rate * Math.pow(1 - rate, year - a.year)
+  }
+  return Math.round(total)
+}
+
+/** Bokført restsaldo ved UTGANGEN av et år, summert over driftsmidler. */
+export function saldoBalance(assets: Asset[], year: number): number {
+  let total = 0
+  for (const a of assets) {
+    const rate = a.rate > 0 && a.rate < 1 ? a.rate : 0.30
+    const cost = Number(a.cost) || 0
+    if (!Number.isFinite(a.year) || year < a.year || cost <= 0) continue
+    total += cost * Math.pow(1 - rate, year - a.year + 1)
+  }
+  return Math.round(total)
+}
+
+// ---------------------------------------------------------------------------
+//  CSV-EKSPORT
+// ---------------------------------------------------------------------------
+
+/** Bygger en semikolon-separert CSV (nb-NO: semikolon-skille, desimalkomma) av
+ *  utgiftsoppføringene for regnskapsfører/regneark. amountOf injiseres fordi
+ *  kjøresats-fallbacken lever i sidene. Ren og testbar. */
+export function entriesToCsv(entries: Entry[], amountOf: (e: Entry) => number): string {
+  const esc = (v: string) => /["\n;]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+  const header = ['Dato', 'Post', 'Kategori', 'Beskrivelse', 'Detaljer', 'Beløp']
+  const rows = entries.map((e) => {
+    const details = e.entryType === 'driving'
+      ? `${e.from}–${e.to}${e.tripType === 'return' ? ' t/r' : ''}, ${e.tripType === 'return' ? e.distance * 2 : e.distance} km`
+      : ''
+    return [e.date, e.category.post, e.category.label, e.description || '', details,
+      amountOf(e).toFixed(2).replace('.', ',')].map((c) => esc(String(c))).join(';')
+  })
+  return [header.join(';'), ...rows].join('\r\n')
 }

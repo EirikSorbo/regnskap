@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
+import { collection, addDoc, doc, getDoc, getDocs, query, where, updateDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
@@ -152,6 +152,23 @@ export default function AddReceiptPage() {
         }
       } else {
         if (!amount || isNaN(Number(amount))) { setError('Ugyldig beløp.'); setSaving(false); return }
+        // Duplikatvarsel (kun ny oppføring): finnes samme beløp på samme dato alt?
+        // Sjekkes FØR opplasting, så vi ikke laster opp bilder ved avbrudd. Egen
+        // try/catch så en feilet sjekk aldri BLOKKERER lagring.
+        if (!isEditing) {
+          try {
+            const amt = parseFloat(amount)
+            const dupSnap = await getDocs(query(collection(db, 'receipts'),
+              where('userId', '==', user.uid), where('date', '==', date)))
+            const dup = dupSnap.docs.some(d => {
+              const r = d.data()
+              return r.entryType === 'receipt' && Math.abs((Number(r.amount) || 0) - amt) < 0.005
+            })
+            if (dup && !confirm(`Det finnes allerede en utgift på ${amt.toLocaleString('nb-NO')} kr datert ${date}. Lagre likevel?`)) {
+              setSaving(false); return
+            }
+          } catch { /* duplikatsjekk feilet — hopp over, ikke blokker lagring */ }
+        }
         const imageUrls = [...existingImageUrls]
         const imagePaths = [...existingImagePaths]
         if (files.length > 0) {

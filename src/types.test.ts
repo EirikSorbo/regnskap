@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   calcDrivingAmount, drivingAmount, calcEkom, filterEntries, managedPostAmount,
-  parseReceiptText, type DrivingEntry, type Entry,
+  parseReceiptText, saldoDepreciation, saldoBalance, entriesToCsv,
+  type DrivingEntry, type Entry, type Asset,
 } from './types.ts'
 
 // Bygger en komplett DrivingEntry med fornuftige standardverdier; testene
@@ -124,4 +125,43 @@ test('parseReceiptText: uten nøkkelord tas største pengetall', () => {
 })
 test('parseReceiptText: heltall uten desimaler (org.nr) plukkes ikke som beløp', () => {
   assert.deepEqual(parseReceiptText('Org 123456789\nTakk'), {})
+})
+
+// --- saldoavskrivning (#2) ---
+const asset = (p: Partial<Asset>): Asset => ({ id: 'a', name: 'Gitar', year: 2023, cost: 100000, rate: 0.30, ...p })
+test('saldoDepreciation: degressiv 30 % saldo per år', () => {
+  const a = [asset({})]
+  assert.equal(saldoDepreciation(a, 2022), 0)      // før anskaffelse
+  assert.equal(saldoDepreciation(a, 2023), 30000)  // 100000 · 0,3
+  assert.equal(saldoDepreciation(a, 2024), 21000)  // · 0,7
+  assert.equal(saldoDepreciation(a, 2025), 14700)  // · 0,49
+})
+test('saldoDepreciation: summerer flere driftsmidler; ugyldig sats → 30 %', () => {
+  const a = [asset({ id: '1' }), asset({ id: '2', cost: 50000, rate: 0 })]
+  assert.equal(saldoDepreciation(a, 2023), 45000)  // 30000 + 50000·0,3
+})
+test('saldoBalance: restsaldo ved årsslutt', () => {
+  const a = [asset({})]
+  assert.equal(saldoBalance(a, 2023), 70000)
+  assert.equal(saldoBalance(a, 2024), 49000)
+})
+test('managedPostAmount: post 6000 bruker saldoregister når det finnes', () => {
+  const s = {
+    ekomPhone: {}, ekomInternet: {}, ekomPrivateAmt: 0,
+    hjemmekontorAmounts: {}, avskrivningerAmounts: { '2023': 9999 },
+    assets: [asset({})],
+  }
+  assert.equal(managedPostAmount('6000', s, 2023), 30000)  // register vinner over manuell 9999
+})
+
+// --- CSV (#8) ---
+test('entriesToCsv: header, semikolon, desimalkomma', () => {
+  const lines = entriesToCsv([receipt], () => 1500).split('\r\n')
+  assert.equal(lines[0], 'Dato;Post;Kategori;Beskrivelse;Detaljer;Beløp')
+  assert.equal(lines[1], '2025-01-01;6500;Utstyr;Mikrofon;;1500,00')
+})
+test('entriesToCsv: felt med semikolon/anførselstegn escapes', () => {
+  const r2: Entry = { ...receipt, id: '9', description: 'Kabel; 2 m "pro"', amount: 200 }
+  const line = entriesToCsv([r2], (e) => (e.entryType === 'receipt' ? e.amount : 0)).split('\r\n')[1]
+  assert.ok(line.includes('"Kabel; 2 m ""pro"""'))
 })
