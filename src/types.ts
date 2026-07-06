@@ -43,6 +43,11 @@ export interface DrivingEntry extends BaseEntry {
   tripType: 'one-way' | 'return'
   distance: number
   passengers: number
+  // Kjøresatsene som gjaldt da turen ble registrert, fryst per oppføring så
+  // historiske tall ikke endrer seg når standardsatsen oppdateres for et nytt
+  // år. Eldre oppføringer mangler feltene og faller tilbake til gjeldende sats.
+  ratePerKm?: number
+  ratePerPassengerKm?: number
 }
 
 export type Entry = ReceiptEntry | DrivingEntry
@@ -73,4 +78,36 @@ export function calcDrivingAmount(
 ): number {
   const totalKm = tripType === 'return' ? distance * 2 : distance
   return totalKm * ratePerKm + totalKm * passengers * ratePerPassengerKm
+}
+
+/** Beløp for en kjøreoppføring. Bruker den fryste satsen som ble lagret på
+ *  oppføringen hvis den finnes, ellers de gjeldende satsene (bakoverkompat for
+ *  eldre oppføringer uten fryst sats). Ett sted, delt av dashbord og rapport. */
+export function drivingAmount(
+  d: DrivingEntry,
+  fallbackPerKm: number,
+  fallbackPerPassengerKm: number
+): number {
+  const perKm = Number.isFinite(d.ratePerKm) ? (d.ratePerKm as number) : fallbackPerKm
+  const perPassengerKm = Number.isFinite(d.ratePerPassengerKm)
+    ? (d.ratePerPassengerKm as number)
+    : fallbackPerPassengerKm
+  return calcDrivingAmount(d.distance, d.tripType, d.passengers, perKm, perPassengerKm)
+}
+
+/** EKOM-beregning (post 7500): sum telefon + internett, minus privatandel
+ *  (aldri mer enn bruttobeløpet). Ren og delt av rapporten og EKOM-modalen, så
+ *  de to ikke kan drive fra hverandre. Ikke-tall behandles som 0. */
+export function calcEkom(
+  phoneMonths: number[],
+  internetQuarters: number[],
+  privateAmt: number
+): { totalPhone: number; totalInternet: number; totalGross: number; deduction: number; net: number } {
+  const sum = (xs: number[]) => xs.reduce((s, v) => s + (Number(v) || 0), 0)
+  const totalPhone = sum(phoneMonths)
+  const totalInternet = sum(internetQuarters)
+  const totalGross = totalPhone + totalInternet
+  const deduction = Math.min(Number(privateAmt) || 0, totalGross)
+  const net = Math.round((totalGross - deduction) * 100) / 100
+  return { totalPhone, totalInternet, totalGross, deduction, net }
 }

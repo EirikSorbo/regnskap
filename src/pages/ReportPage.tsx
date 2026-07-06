@@ -6,7 +6,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   type Entry, type ReceiptEntry, type DrivingEntry,
-  CATEGORIES, calcDrivingAmount, getImagePaths,
+  CATEGORIES, drivingAmount, calcEkom, getImagePaths,
 } from '../types'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -51,15 +51,13 @@ export default function ReportPage() {
   const phoneMonths = settings.ekomPhone[ys] || Array(12).fill(0)
   const internetQuarters = settings.ekomInternet[ys] || Array(4).fill(0)
   const privateAmt = settings.ekomPrivateAmt
-  const totalPhone = phoneMonths.reduce((s, v) => s + (Number(v) || 0), 0)
-  const totalInternet = internetQuarters.reduce((s, v) => s + (Number(v) || 0), 0)
-  const totalGross = totalPhone + totalInternet
-  const ekomDeduction = Math.min(privateAmt, totalGross)
-  const ekomNet = Math.round((totalGross - ekomDeduction) * 100) / 100
+  const { totalPhone, totalInternet, totalGross, deduction: ekomDeduction, net: ekomNet } =
+    calcEkom(phoneMonths, internetQuarters, privateAmt)
 
   const [entries, setEntries] = useState<Entry[]>([])
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!user) return
@@ -70,11 +68,24 @@ export default function ReportPage() {
       setEntries(receiptSnap.docs.map(d => ({ id: d.id, ...d.data() } as Entry)))
       setIncomeEntries(incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as IncomeEntry)))
       setLoading(false)
+    }).catch(err => {
+      // Uten dette ble siden stående på «Laster rapport...» for alltid ved feil.
+      setError(err instanceof Error ? err.message : String(err))
+      setLoading(false)
     })
   }, [user])
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Laster rapport...</div>
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-6 text-center text-sm">
+        <p className="text-red-500">Kunne ikke laste rapporten: {error}</p>
+        <button onClick={() => navigate('/')} className="text-slate-500 underline">Tilbake</button>
+      </div>
+    )
   }
 
   const yearEntries = entries.filter(e => e.date.startsWith(String(year)))
@@ -83,8 +94,7 @@ export default function ReportPage() {
 
   function getAmount(entry: Entry): number {
     if (entry.entryType === 'receipt') return (entry as ReceiptEntry).amount
-    const d = entry as DrivingEntry
-    return calcDrivingAmount(d.distance, d.tripType, d.passengers, ratePerKm, ratePerPassengerKm)
+    return drivingAmount(entry as DrivingEntry, ratePerKm, ratePerPassengerKm)
   }
 
   // Group entries by post, sorted by date

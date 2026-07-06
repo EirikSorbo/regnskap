@@ -3,6 +3,7 @@ import { collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 import { CATEGORIES, DRIVING_CATEGORY, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
@@ -19,6 +20,7 @@ function IconArrowLeft() {
 
 export default function AddReceiptPage() {
   const { user } = useAuth()
+  const { settings } = useSettings()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const editId = searchParams.get('edit')
@@ -61,7 +63,7 @@ export default function AddReceiptPage() {
     getDoc(doc(db, 'receipts', editId)).then(snap => {
       if (!snap.exists()) { navigate('/'); return }
       const data = snap.data()
-      setCategoryPost(data.category.post)
+      setCategoryPost(data.category?.post ?? CATEGORIES[0].post)
       setDate(data.date)
       setDescription(data.description || '')
       if (data.entryType === 'driving') {
@@ -77,6 +79,10 @@ export default function AddReceiptPage() {
         setExistingImageUrls(getImageUrls(r))
         setExistingImagePaths(getImagePaths(r))
       }
+      setLoadingEntry(false)
+    }).catch(err => {
+      // Uten dette ble redigeringssiden stående på «Laster...» for alltid ved feil.
+      setError('Kunne ikke laste oppføringen: ' + (err instanceof Error ? err.message : String(err)))
       setLoadingEntry(false)
     })
   }, [editId, navigate])
@@ -100,21 +106,30 @@ export default function AddReceiptPage() {
           passengers: passengers ? parseInt(passengers) : 0,
         }
         if (isEditing) {
+          // Ikke rør ratePerKm/ratePerPassengerKm ved redigering — den fryste
+          // satsen fra da turen ble registrert skal bli stående (updateDoc lar
+          // felter som ikke sendes med være urørt).
           await updateDoc(doc(db, 'receipts', editId!), data)
         } else {
-          await addDoc(collection(db, 'receipts'), { userId: user.uid, ...data, createdAt: Date.now() })
+          await addDoc(collection(db, 'receipts'), {
+            userId: user.uid, ...data, createdAt: Date.now(),
+            ratePerKm: settings.drivingRatePerKm,
+            ratePerPassengerKm: settings.drivingRatePerPassengerKm,
+          })
         }
       } else {
         if (!amount || isNaN(Number(amount))) { setError('Ugyldig beløp.'); setSaving(false); return }
         const imageUrls = [...existingImageUrls]
         const imagePaths = [...existingImagePaths]
         if (files.length > 0) {
-          const existingCount = existingImagePaths.length
           for (let i = 0; i < files.length; i++) {
             const f = files[i]
             const ext = f.name.split('.').pop()?.toLowerCase() || 'jpg'
-            const idx = String(existingCount + i + 1).padStart(3, '0')
-            const path = `receipts/${user.uid}/${categoryPost}-${date}-${idx}.${ext}`
+            // Unik sti per opplasting. Tidligere ble stien avledet av post+dato+
+            // løpenummer, så to ulike kvitteringer med samme post og dato skrev
+            // begge til «…-001» og overskrev hverandres bilde stille i Storage.
+            const unique = `${Date.now().toString(36)}${i}-${Math.random().toString(36).slice(2, 8)}`
+            const path = `receipts/${user.uid}/${categoryPost}-${date}-${unique}.${ext}`
             const storageRef = ref(storage, path)
             await uploadBytes(storageRef, f)
             const url = await getDownloadURL(storageRef)

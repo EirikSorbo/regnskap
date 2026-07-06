@@ -22,7 +22,7 @@ export default function App() {
   return (
     <AuthProvider>
       <SettingsProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />

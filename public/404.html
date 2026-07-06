@@ -2,16 +2,22 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <title>Regnskap</title>
     <script>
-      // GitHub Pages SPA redirect trick
+      // GitHub Pages SPA-omdirigering (rafgraph/spa-github-pages).
+      // Koder stien inn i query-strengen som «?/…» og sender til app-roten,
+      // der index.html sitt skript dekoder den tilbake. pathSegmentsToKeep=1
+      // beholder prosjektbasen «/regnskap». MÅ matche dekoderen i index.html.
+      var pathSegmentsToKeep = 1;
       var l = window.location;
       l.replace(
         l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-        l.pathname.split('/').slice(0, 2).join('/') +
-        '/?p=/' + l.pathname.slice(1).replace(/&/g, '~and~') +
-        (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
         l.hash
       );
     </script>
   </head>
+  <body></body>
 </html>

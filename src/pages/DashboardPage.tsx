@@ -31,13 +31,13 @@ function IconCar() {
 }
 
 import { useState, useEffect } from 'react'
-import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, updateDoc, getDocs } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, setDoc, updateDoc, getDocs } from 'firebase/firestore'
 import { ref, deleteObject, getBlob, uploadBytes } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
 import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
-import { useSettings, convertLegacySettings } from '../context/SettingsContext'
-import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, calcDrivingAmount, getImageUrls, getImagePaths } from '../types'
+import { useSettings, convertLegacySettings, type UserSettings } from '../context/SettingsContext'
+import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, drivingAmount, calcEkom, getImageUrls, getImagePaths } from '../types'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -55,6 +55,53 @@ interface IncomeEntry {
   date: string
   description: string
   createdAt: number
+}
+
+// Formen på en importert backup-fil (JSON, eller JSON-en inne i en ZIP). Alt er
+// valgfritt fordi eldre backup-formater kan mangle felter. Vi leser bare
+// id/userId/imagePath eksplisitt; resten skrives videre uendret (unknown).
+interface BackupEntry {
+  id?: string
+  userId?: string
+  imagePath?: string
+  [key: string]: unknown
+}
+interface BackupData {
+  receipts?: BackupEntry[]
+  income?: BackupEntry[]
+  settings?: Record<string, unknown>
+  exportedAt?: string
+  year?: number | string
+}
+
+// Oppdaterer (eller gjenoppretter) det automatiske «skygge»-kvitteringsdokumentet
+// for EKOM/hjemmekontor/avskrivninger. Faller KUN tilbake til å opprette et nytt
+// dokument når det gamle faktisk er borte (not-found). En transient nettverks-
+// eller regelfeil kastes videre i stedet for å lage en duplikatpost — kalleren
+// fanger den og viser feilen. createIfMissing=false lar et 0-beløp la være å
+// opprette en ny post når den gamle er slettet.
+async function upsertAutoReceipt(
+  existingId: string | undefined,
+  userId: string,
+  dateStr: string,
+  updateData: Record<string, unknown>,
+  createIfMissing: boolean,
+): Promise<string | undefined> {
+  if (existingId) {
+    try {
+      await updateDoc(doc(db, 'receipts', existingId), updateData)
+      return existingId
+    } catch (err) {
+      if ((err as { code?: string })?.code !== 'not-found') throw err
+      // dokumentet var slettet — fall gjennom til eventuell nyoppretting
+    }
+  }
+  if (!createIfMissing) return undefined
+  const d = await addDoc(collection(db, 'receipts'), {
+    userId, entryType: 'receipt', imageUrl: '', imagePath: '',
+    date: dateStr, createdAt: Date.now(), ...updateData,
+  })
+  return d.id
 }
 
 function BackupModal({ years, downloadingZip, onBackup, onZip, onFullBackup, onClose }: {
@@ -137,11 +184,8 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
   const [privateAmt, setPrivateAmt] = useState(settings.ekomPrivateAmt)
   const [saving, setSaving] = useState(false)
 
-  const totalPhone = phoneMonths.reduce((s, v) => s + (Number(v) || 0), 0)
-  const totalInternet = internetQuarters.reduce((s, v) => s + (Number(v) || 0), 0)
-  const totalGross = totalPhone + totalInternet
-  const deductionAmount = Math.min(parseFloat(String(privateAmt)) || 0, totalGross)
-  const netAmount = Math.round((totalGross - deductionAmount) * 100) / 100
+  const { totalPhone, totalInternet, totalGross, deduction: deductionAmount, net: netAmount } =
+    calcEkom(phoneMonths, internetQuarters, parseFloat(String(privateAmt)) || 0)
 
   function updatePhone(i: number, val: string) {
     const next = [...phoneMonths]; next[i] = parseFloat(val) || 0; setPhoneMonths(next)
@@ -152,28 +196,24 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
 
   async function handleSave() {
     setSaving(true)
-    const category = CATEGORIES.find(c => c.post === '7500')!
-    const updateData = { amount: netAmount, category, description: 'EKOM-beregning (automatisk)' }
-    const existingId = settings.ekomEntryIds[ys]
-    let entryId = existingId
-    if (existingId) {
-      try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
-      catch {
-        const d = await addDoc(collection(db, 'receipts'), { userId, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${year}-12-31`, createdAt: Date.now(), ...updateData })
-        entryId = d.id
-      }
-    } else {
-      const d = await addDoc(collection(db, 'receipts'), { userId, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${year}-12-31`, createdAt: Date.now(), ...updateData })
-      entryId = d.id
+    try {
+      const category = CATEGORIES.find(c => c.post === '7500')!
+      const updateData = { amount: netAmount, category, description: 'EKOM-beregning (automatisk)' }
+      const entryId = await upsertAutoReceipt(
+        settings.ekomEntryIds[ys], userId, `${year}-12-31`, updateData, true,
+      )
+      await updateSettings({
+        ekomPhone: { ...settings.ekomPhone, [ys]: phoneMonths },
+        ekomInternet: { ...settings.ekomInternet, [ys]: internetQuarters },
+        ekomPrivateAmt: parseFloat(String(privateAmt)) || 0,
+        ekomEntryIds: { ...settings.ekomEntryIds, [ys]: entryId || '' },
+      })
+      onClose()
+    } catch (err) {
+      alert('Kunne ikke lagre EKOM-beregningen: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
     }
-    await updateSettings({
-      ekomPhone: { ...settings.ekomPhone, [ys]: phoneMonths },
-      ekomInternet: { ...settings.ekomInternet, [ys]: internetQuarters },
-      ekomPrivateAmt: parseFloat(String(privateAmt)) || 0,
-      ekomEntryIds: { ...settings.ekomEntryIds, [ys]: entryId },
-    })
-    setSaving(false)
-    onClose()
   }
 
   return (
@@ -273,7 +313,7 @@ export default function DashboardPage() {
   const [showDrivingModal, setShowDrivingModal] = useState(false)
   const [showBackupModal, setShowBackupModal] = useState(false)
   const [importStatus, setImportStatus] = useState('')
-  const [importPending, setImportPending] = useState<{ file: File; data: any; attachmentFiles: { name: string; blob: Blob }[] } | null>(null)
+  const [importPending, setImportPending] = useState<{ file: File; data: BackupData; attachmentFiles: { name: string; blob: Blob }[] } | null>(null)
   const [downloadingZip, setDownloadingZip] = useState(false)
 
   // Sync settings from Firestore → local state
@@ -339,8 +379,7 @@ export default function DashboardPage() {
 
   function getAmount(entry: Entry): number {
     if (entry.entryType === 'receipt') return (entry as ReceiptEntry).amount
-    const d = entry as DrivingEntry
-    return calcDrivingAmount(d.distance, d.tripType, d.passengers, ratePerKm, ratePerPassengerKm)
+    return drivingAmount(entry as DrivingEntry, ratePerKm, ratePerPassengerKm)
   }
 
   const yearEntries = entries.filter(r => r.date.startsWith(String(selectedYear)))
@@ -354,7 +393,7 @@ export default function DashboardPage() {
     try {
       if (entry.entryType === 'receipt') {
         for (const p of getImagePaths(entry as ReceiptEntry)) {
-          try { await deleteObject(ref(storage, p)) } catch {}
+          try { await deleteObject(ref(storage, p)) } catch { /* filen finnes ikke / alt slettet — ignorer */ }
         }
       }
       await deleteDoc(doc(db, 'receipts', entry.id))
@@ -387,57 +426,45 @@ export default function DashboardPage() {
   async function handleSaveHjemmekontor() {
     if (!user) return
     setSavingHjemmekontor(true)
-    const ys = String(selectedYear)
-    const amount = parseFloat(hjemmekontorAmt) || 0
-    const category = CATEGORIES.find(c => c.post === '7770')!
-    const updateData = { amount, category, description: 'Hjemmekontor fradrag' }
-    const existingId = settings.hjemmekontorEntryIds[ys]
-    let entryId = existingId
-    if (existingId) {
-      try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
-      catch {
-        if (amount > 0) {
-          const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-          entryId = d.id
-        }
-      }
-    } else if (amount > 0) {
-      const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-      entryId = d.id
+    try {
+      const ys = String(selectedYear)
+      const amount = parseFloat(hjemmekontorAmt) || 0
+      const category = CATEGORIES.find(c => c.post === '7770')!
+      const updateData = { amount, category, description: 'Hjemmekontor fradrag' }
+      const entryId = await upsertAutoReceipt(
+        settings.hjemmekontorEntryIds[ys], user.uid, `${selectedYear}-12-31`, updateData, amount > 0,
+      )
+      await updateSettings({
+        hjemmekontorAmounts: { ...settings.hjemmekontorAmounts, [ys]: amount },
+        hjemmekontorEntryIds: { ...settings.hjemmekontorEntryIds, [ys]: entryId || '' },
+      })
+    } catch (err) {
+      alert('Kunne ikke lagre hjemmekontor: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSavingHjemmekontor(false)
     }
-    await updateSettings({
-      hjemmekontorAmounts: { ...settings.hjemmekontorAmounts, [ys]: amount },
-      hjemmekontorEntryIds: { ...settings.hjemmekontorEntryIds, [ys]: entryId || '' },
-    })
-    setSavingHjemmekontor(false)
   }
 
   async function handleSaveAvskrivninger() {
     if (!user) return
     setSavingAvskrivninger(true)
-    const ys = String(selectedYear)
-    const amount = parseFloat(avskrivningerAmt) || 0
-    const category = CATEGORIES.find(c => c.post === '6000')!
-    const updateData = { amount, category, description: 'Avskrivninger (automatisk)' }
-    const existingId = settings.avskrivningerEntryIds[ys]
-    let entryId = existingId
-    if (existingId) {
-      try { await updateDoc(doc(db, 'receipts', existingId), updateData) }
-      catch {
-        if (amount > 0) {
-          const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-          entryId = d.id
-        }
-      }
-    } else if (amount > 0) {
-      const d = await addDoc(collection(db, 'receipts'), { userId: user.uid, entryType: 'receipt', imageUrl: '', imagePath: '', date: `${selectedYear}-12-31`, createdAt: Date.now(), ...updateData })
-      entryId = d.id
+    try {
+      const ys = String(selectedYear)
+      const amount = parseFloat(avskrivningerAmt) || 0
+      const category = CATEGORIES.find(c => c.post === '6000')!
+      const updateData = { amount, category, description: 'Avskrivninger (automatisk)' }
+      const entryId = await upsertAutoReceipt(
+        settings.avskrivningerEntryIds[ys], user.uid, `${selectedYear}-12-31`, updateData, amount > 0,
+      )
+      await updateSettings({
+        avskrivningerAmounts: { ...settings.avskrivningerAmounts, [ys]: amount },
+        avskrivningerEntryIds: { ...settings.avskrivningerEntryIds, [ys]: entryId || '' },
+      })
+    } catch (err) {
+      alert('Kunne ikke lagre avskrivninger: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSavingAvskrivninger(false)
     }
-    await updateSettings({
-      avskrivningerAmounts: { ...settings.avskrivningerAmounts, [ys]: amount },
-      avskrivningerEntryIds: { ...settings.avskrivningerEntryIds, [ys]: entryId || '' },
-    })
-    setSavingAvskrivninger(false)
   }
 
   function buildAttachmentMap(filteredEntries: Entry[]) {
@@ -583,8 +610,8 @@ export default function DashboardPage() {
     e.target.value = ''
     setImportStatus('Leser fil...')
     try {
-      let data: any
-      let attachmentFiles: { name: string; blob: Blob }[] = []
+      let data: BackupData
+      const attachmentFiles: { name: string; blob: Blob }[] = []
 
       if (file.name.endsWith('.zip')) {
         const zip = await JSZip.loadAsync(file)
@@ -605,8 +632,8 @@ export default function DashboardPage() {
       }
 
       if (!data.receipts || !data.income) { setImportStatus('Ugyldig backup-fil.'); return }
-      const receiptsCount = (data.receipts as any[]).filter((r: any) => r.userId === user.uid).length
-      const incomeCount = (data.income as any[]).filter((r: any) => r.userId === user.uid).length
+      const receiptsCount = data.receipts.filter(r => r.userId === user.uid).length
+      const incomeCount = data.income.filter(r => r.userId === user.uid).length
       setImportStatus(`Fil lest: ${receiptsCount} utgifter, ${incomeCount} inntekter${attachmentFiles.length > 0 ? `, ${attachmentFiles.length} vedlegg` : ''}. Velg importmetode:`)
       setImportPending({ file, data, attachmentFiles })
     } catch (err) {
@@ -627,11 +654,13 @@ export default function DashboardPage() {
       // In restore mode, delete all existing data first
       if (mode === 'restore') {
         setImportStatus('Sletter eksisterende data...')
+        // Behold Storage-objektene ved gjenoppretting: de importerte receipt-
+        // dokumentene beholder sine opprinnelige imagePath/imageUrl, så bildene
+        // overlever selv når backupen bare var JSON (uten vedlegg). Å slette dem
+        // her ga permanent bildetap ved restore fra en kun-JSON-backup. Filer fra
+        // en helt annen backup blir liggende som (ufarlige) foreldreløse objekter
+        // i stedet for at noe slettes vi ikke kan gjenopprette.
         for (const d of existingReceipts.docs) {
-          const entry = d.data() as ReceiptEntry
-          for (const p of getImagePaths(entry)) {
-            try { await deleteObject(ref(storage, p)) } catch {}
-          }
           await deleteDoc(doc(db, 'receipts', d.id))
         }
         for (const d of existingIncome.docs) {
@@ -645,20 +674,25 @@ export default function DashboardPage() {
       setImportStatus('Importerer...')
       let count = 0
       let skipped = 0
-      for (const r of data.receipts as any[]) {
+      // Bevar dokument-id-en fra backupen (setDoc), så en ny import av samme fil
+      // ikke lager duplikater — den id-baserte dedup-en over treffer da faktisk.
+      // Oppføringer uten id (eldre backup-format) faller tilbake til addDoc.
+      for (const r of data.receipts ?? []) {
         const { id, ...fields } = r
         if (fields.userId && fields.userId !== user.uid) continue
         fields.userId = user.uid
         if (id && existingReceiptIds.has(id)) { skipped++; continue }
-        await addDoc(collection(db, 'receipts'), fields)
+        if (id) await setDoc(doc(db, 'receipts', String(id)), fields)
+        else await addDoc(collection(db, 'receipts'), fields)
         count++
       }
-      for (const inc of data.income as any[]) {
+      for (const inc of data.income ?? []) {
         const { id, ...fields } = inc
         if (fields.userId && fields.userId !== user.uid) continue
         fields.userId = user.uid
         if (id && existingIncomeIds.has(id)) { skipped++; continue }
-        await addDoc(collection(db, 'income'), fields)
+        if (id) await setDoc(doc(db, 'income', String(id)), fields)
+        else await addDoc(collection(db, 'income'), fields)
         count++
       }
 
@@ -666,7 +700,7 @@ export default function DashboardPage() {
       if (attachmentFiles.length > 0) {
         setImportStatus(`Laster opp ${attachmentFiles.length} vedlegg...`)
         for (const af of attachmentFiles) {
-          const matchingReceipt = data.receipts?.find((r: any) => r.imagePath?.endsWith(af.name))
+          const matchingReceipt = data.receipts?.find(r => typeof r.imagePath === 'string' && r.imagePath.endsWith(af.name))
           if (matchingReceipt && matchingReceipt.imagePath) {
             try {
               const storageRef = ref(storage, matchingReceipt.imagePath)
@@ -678,12 +712,15 @@ export default function DashboardPage() {
       }
 
       if (data.settings && typeof data.settings === 'object') {
-        // Detect old localStorage format vs new Firestore format
+        // Detect old localStorage format vs new Firestore format. data.settings er
+        // Record<string, unknown> fra backupen; castene her er import-grensen der
+        // vi tar formen på tro (gammel localStorage-backup = strengverdier, ny =
+        // UserSettings-form).
         const isLegacy = 'driving_rate_per_km' in data.settings
         if (isLegacy) {
-          await updateSettings(convertLegacySettings(data.settings))
+          await updateSettings(convertLegacySettings(data.settings as Record<string, string>))
         } else {
-          await updateSettings(data.settings)
+          await updateSettings(data.settings as Partial<UserSettings>)
         }
       }
 
@@ -714,7 +751,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.44</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.45</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -823,13 +860,13 @@ export default function DashboardPage() {
                     <p className="text-xs text-slate-400">Kjøring registreres på post 7080</p>
                     <div>
                       <label className="block text-xs text-slate-500 mb-1">Kr per km</label>
-                      <input type="number" value={ratePerKm} onChange={e => setRatePerKm(parseFloat(e.target.value))}
+                      <input type="number" value={ratePerKm} onChange={e => { const v = parseFloat(e.target.value); setRatePerKm(Number.isFinite(v) ? v : 0) }}
                         min="0" step="0.01"
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div>
                       <label className="block text-xs text-slate-500 mb-1">Kr per passasjer per km</label>
-                      <input type="number" value={ratePerPassengerKm} onChange={e => setRatePerPassengerKm(parseFloat(e.target.value))}
+                      <input type="number" value={ratePerPassengerKm} onChange={e => { const v = parseFloat(e.target.value); setRatePerPassengerKm(Number.isFinite(v) ? v : 0) }}
                         min="0" step="0.01"
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
@@ -1267,6 +1304,9 @@ export default function DashboardPage() {
         {/* Backup reminder */}
         {(() => {
           const lastBackup = settings.lastBackupAt
+          // Date.now() i render er trygt her: banneret trenger bare et omtrentlig
+          // «dager siden backup», og verdien inngår ikke i noen memo/likhetssjekk.
+          // eslint-disable-next-line react-hooks/purity
           const daysSince = lastBackup ? Math.floor((Date.now() - lastBackup) / (1000 * 60 * 60 * 24)) : null
           const needsBackup = !lastBackup || daysSince! >= 30
           if (!needsBackup) return null
