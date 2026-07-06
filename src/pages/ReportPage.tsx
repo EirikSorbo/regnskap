@@ -6,7 +6,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   type Entry, type ReceiptEntry, type DrivingEntry,
-  CATEGORIES, drivingAmount, calcEkom, getImagePaths,
+  CATEGORIES, SETTINGS_MANAGED_POSTS, drivingAmount, calcEkom, managedPostAmount, getImagePaths,
 } from '../types'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -97,16 +97,22 @@ export default function ReportPage() {
     return drivingAmount(entry as DrivingEntry, ratePerKm, ratePerPassengerKm)
   }
 
-  // Group entries by post, sorted by date
-  const postGroups = CATEGORIES
+  // Grupper per post i kontoplan-rekkefølge. Settings-styrte poster (EKOM/
+  // hjemmekontor/avskrivninger) henter årsbeløpet fra innstillinger (identisk med
+  // det de gamle skygge-kvitteringene lagret); resten summeres fra kvitteringer.
+  const postGroups = (settings.categories ?? CATEGORIES)
     .map(cat => {
+      const managed = managedPostAmount(cat.post, settings, year)
+      if (managed !== null) {
+        return { cat, entries: [] as Entry[], sum: managed, managed: true }
+      }
       const catEntries = yearEntries
         .filter(e => e.category.post === cat.post)
         .sort((a, b) => a.date.localeCompare(b.date))
       const sum = catEntries.reduce((s, e) => s + getAmount(e), 0)
-      return { cat, entries: catEntries, sum }
+      return { cat, entries: catEntries, sum, managed: false }
     })
-    .filter(g => g.entries.length > 0)
+    .filter(g => g.managed ? g.sum !== 0 : g.entries.length > 0)
 
   const totalExpenses = postGroups.reduce((s, g) => s + g.sum, 0)
   const result = totalIncome - totalExpenses
@@ -227,6 +233,7 @@ export default function ReportPage() {
         {postGroups.map(group => {
           const isDriving = group.cat.post === '7080'
           const isEkom = group.cat.post === '7500'
+          const isManaged = SETTINGS_MANAGED_POSTS.includes(group.cat.post)
           return (
             <div key={group.cat.post} className="page-break-after">
               <div className="pt-8 pb-8">
@@ -238,7 +245,7 @@ export default function ReportPage() {
                       <h2 className="text-2xl font-bold text-slate-800 mt-1">{group.cat.label}</h2>
                     </div>
                     <div className="text-right">
-                      {!isEkom && <p className="text-xs text-slate-400">{group.entries.length} oppføring{group.entries.length !== 1 ? 'er' : ''}</p>}
+                      {!isManaged && <p className="text-xs text-slate-400">{group.entries.length} oppføring{group.entries.length !== 1 ? 'er' : ''}</p>}
                       <p className="text-xl font-bold text-slate-800 tabular-nums mt-0.5">{fmt(group.sum)} kr</p>
                     </div>
                   </div>
@@ -354,6 +361,8 @@ export default function ReportPage() {
                       </tr>
                     </tfoot>
                   </table>
+                ) : isManaged ? (
+                  <p className="text-sm text-slate-500">Beregnet automatisk fra innstillinger (se {group.cat.label.toLowerCase()} i appen).</p>
                 ) : (
                   <table className="w-full text-sm">
                     <thead>

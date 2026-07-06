@@ -69,6 +69,16 @@ export const CATEGORIES: Category[] = [
   { post: '7700', label: 'Annen driftskostnad' },
 ]
 
+// Poster appen har innebygd logikk for og som derfor alltid må finnes: kjøring
+// (7080), og de tre settings-styrte postene EKOM (7500), hjemmekontor (7770) og
+// avskrivninger (6000). Kategori-editoren tillater ikke å slette disse.
+export const SYSTEM_POSTS = ['7080', '7500', '7770', '6000']
+
+// Postene hvis årsbeløp beregnes fra innstillinger (ikke fra kvitteringer):
+// EKOM, hjemmekontor og avskrivninger. Rapporten og oversikten henter disse fra
+// settings i stedet for å summere skjulte «skygge»-kvitteringer.
+export const SETTINGS_MANAGED_POSTS = ['7500', '7770', '6000']
+
 export function calcDrivingAmount(
   distance: number,
   tripType: 'one-way' | 'return',
@@ -95,6 +105,22 @@ export function drivingAmount(
   return calcDrivingAmount(d.distance, d.tripType, d.passengers, perKm, perPassengerKm)
 }
 
+/** Fritekstfilter for oppføringslista: matcher beskrivelse, kategori (navn +
+ *  postnr), beløp, og fra/til for kjøreturer. Ren og testbar. */
+export function filterEntries(entries: Entry[], query: string): Entry[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return entries
+  return entries.filter((e) => {
+    const parts: (string | undefined)[] = [e.description, e.category.label, e.category.post]
+    if (e.entryType === 'driving') {
+      parts.push(e.from, e.to)
+    } else {
+      parts.push(String(e.amount))
+    }
+    return parts.some((p) => (p || '').toLowerCase().includes(q))
+  })
+}
+
 /** EKOM-beregning (post 7500): sum telefon + internett, minus privatandel
  *  (aldri mer enn bruttobeløpet). Ren og delt av rapporten og EKOM-modalen, så
  *  de to ikke kan drive fra hverandre. Ikke-tall behandles som 0. */
@@ -110,4 +136,72 @@ export function calcEkom(
   const deduction = Math.min(Number(privateAmt) || 0, totalGross)
   const net = Math.round((totalGross - deduction) * 100) / 100
   return { totalPhone, totalInternet, totalGross, deduction, net }
+}
+
+// Delmengden av innstillingene som styrer de tre postene EKOM/hjemmekontor/
+// avskrivninger. UserSettings er strukturelt tilordnbar hit (unngår import-sykel
+// mot SettingsContext).
+export interface ManagedSettings {
+  ekomPhone: Record<string, number[]>
+  ekomInternet: Record<string, number[]>
+  ekomPrivateAmt: number
+  hjemmekontorAmounts: Record<string, number>
+  avskrivningerAmounts: Record<string, number>
+}
+
+/** Årsbeløpet for en settings-styrt post (SETTINGS_MANAGED_POSTS), utledet fra
+ *  innstillingene i stedet for fra kvitteringer. Returnerer null for poster som
+ *  IKKE er settings-styrte (de summeres fra kvitteringer som før). Verdien er per
+ *  konstruksjon den samme som de gamle skjulte «skygge»-kvitteringene lagret, så
+ *  totalene endrer seg ikke når skygge-mønsteret fjernes. */
+export function managedPostAmount(post: string, s: ManagedSettings, year: number): number | null {
+  const ys = String(year)
+  if (post === '7500') return calcEkom(s.ekomPhone[ys] || [], s.ekomInternet[ys] || [], s.ekomPrivateAmt).net
+  if (post === '7770') return s.hjemmekontorAmounts[ys] || 0
+  if (post === '6000') return s.avskrivningerAmounts[ys] || 0
+  return null
+}
+
+/** Trekker ut beløp og dato fra OCR-råtekst av en kvittering. Ren og testbar;
+ *  selve tekstgjenkjenningen (Tesseract) skjer i AddReceiptPage. Heuristikk:
+ *  dato som dd.mm.åååå / åååå-mm-dd; beløp = største «pengeaktige» tall (to
+ *  desimaler), helst på en linje med «sum/totalt/å betale». Resultatet er et
+ *  FORSLAG brukeren bekrefter/retter — aldri en stille sannhet. */
+export function parseReceiptText(text: string): { amount?: number; date?: string } {
+  const out: { amount?: number; date?: string } = {}
+
+  // --- Dato ---
+  const ymd = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/)
+  const dmy = text.match(/\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})\b/)
+  if (ymd) {
+    out.date = `${ymd[1]}-${ymd[2]}-${ymd[3]}`
+  } else if (dmy) {
+    let y = dmy[3]
+    if (y.length === 2) y = (Number(y) > 70 ? '19' : '20') + y
+    const dd = dmy[1].padStart(2, '0'), mm = dmy[2].padStart(2, '0')
+    if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) out.date = `${y}-${mm}-${dd}`
+  }
+
+  // --- Beløp ---
+  const moneyRe = /\d{1,3}(?:[ .]\d{3})*[.,]\d{2}|\d+[.,]\d{2}/g
+  const parseNum = (raw: string): number | null => {
+    let s = raw.replace(/\s/g, '')
+    if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.') // 1.234,50
+    else if (s.includes(',')) s = s.replace(',', '.')                                  // 234,50
+    const n = parseFloat(s)
+    return Number.isFinite(n) ? n : null
+  }
+  const KEYWORDS = ['å betale', 'totalt', 'total', 'sum', 'beløp', 'to pay']
+  const keyworded: number[] = []
+  for (const line of text.split(/\r?\n/)) {
+    if (KEYWORDS.some((k) => line.toLowerCase().includes(k))) {
+      for (const t of line.match(moneyRe) || []) { const n = parseNum(t); if (n != null) keyworded.push(n) }
+    }
+  }
+  const pool = keyworded.length
+    ? keyworded
+    : (text.match(moneyRe) || []).map(parseNum).filter((n): n is number => n != null)
+  const candidate = pool.length ? Math.max(...pool) : undefined
+  if (candidate != null && candidate > 0) out.amount = Math.round(candidate * 100) / 100
+  return out
 }

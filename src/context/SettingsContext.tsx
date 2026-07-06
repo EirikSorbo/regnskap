@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from './AuthContext'
+import { CATEGORIES, type Category } from '../types'
 
 export interface UserSettings {
   drivingRatePerKm: number
@@ -14,8 +15,10 @@ export interface UserSettings {
   hjemmekontorEntryIds: Record<string, string>
   avskrivningerAmounts: Record<string, number>
   avskrivningerEntryIds: Record<string, string>
+  categories?: Category[]  // brukerens redigerbare kontoplan; default = CATEGORIES
   lastBackupAt?: number  // timestamp of last full backup
   postNumbersMigrated?: boolean
+  shadowReceiptsRemoved?: boolean  // engangs-migrering: skjulte EKOM/HK/avskr.-kvitteringer slettet
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -29,6 +32,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   hjemmekontorEntryIds: {},
   avskrivningerAmounts: {},
   avskrivningerEntryIds: {},
+  categories: CATEGORIES,
 }
 
 interface SettingsContextValue {

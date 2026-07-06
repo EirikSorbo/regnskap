@@ -36,7 +36,7 @@ import { ref, deleteObject, getBlob, uploadBytes } from 'firebase/storage'
 import { db, auth, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings, convertLegacySettings, type UserSettings } from '../context/SettingsContext'
-import { type Entry, type ReceiptEntry, type DrivingEntry, CATEGORIES, drivingAmount, calcEkom, getImageUrls, getImagePaths } from '../types'
+import { type Entry, type ReceiptEntry, type DrivingEntry, type Category, CATEGORIES, SYSTEM_POSTS, SETTINGS_MANAGED_POSTS, drivingAmount, calcEkom, filterEntries, managedPostAmount, getImageUrls, getImagePaths } from '../types'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -73,35 +73,6 @@ interface BackupData {
   year?: number | string
 }
 
-// Oppdaterer (eller gjenoppretter) det automatiske «skygge»-kvitteringsdokumentet
-// for EKOM/hjemmekontor/avskrivninger. Faller KUN tilbake til å opprette et nytt
-// dokument når det gamle faktisk er borte (not-found). En transient nettverks-
-// eller regelfeil kastes videre i stedet for å lage en duplikatpost — kalleren
-// fanger den og viser feilen. createIfMissing=false lar et 0-beløp la være å
-// opprette en ny post når den gamle er slettet.
-async function upsertAutoReceipt(
-  existingId: string | undefined,
-  userId: string,
-  dateStr: string,
-  updateData: Record<string, unknown>,
-  createIfMissing: boolean,
-): Promise<string | undefined> {
-  if (existingId) {
-    try {
-      await updateDoc(doc(db, 'receipts', existingId), updateData)
-      return existingId
-    } catch (err) {
-      if ((err as { code?: string })?.code !== 'not-found') throw err
-      // dokumentet var slettet — fall gjennom til eventuell nyoppretting
-    }
-  }
-  if (!createIfMissing) return undefined
-  const d = await addDoc(collection(db, 'receipts'), {
-    userId, entryType: 'receipt', imageUrl: '', imagePath: '',
-    date: dateStr, createdAt: Date.now(), ...updateData,
-  })
-  return d.id
-}
 
 function BackupModal({ years, downloadingZip, onBackup, onZip, onFullBackup, onClose }: {
   years: number[]
@@ -175,7 +146,7 @@ function BackupModal({ years, downloadingZip, onBackup, onZip, onFullBackup, onC
   )
 }
 
-function EkomModal({ userId, year, onClose }: { userId: string; year: number; onClose: () => void }) {
+function EkomModal({ year, onClose }: { year: number; onClose: () => void }) {
   const { settings, updateSettings } = useSettings()
   const ys = String(year)
   const [phoneMonths, setPhoneMonths] = useState<number[]>(settings.ekomPhone[ys] || Array(12).fill(0))
@@ -196,16 +167,12 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
   async function handleSave() {
     setSaving(true)
     try {
-      const category = CATEGORIES.find(c => c.post === '7500')!
-      const updateData = { amount: netAmount, category, description: 'EKOM-beregning (automatisk)' }
-      const entryId = await upsertAutoReceipt(
-        settings.ekomEntryIds[ys], userId, `${year}-12-31`, updateData, true,
-      )
+      // Kun til settings. Årsbeløpet (post 7500) beregnes fra disse verdiene i
+      // rapport/oversikt via managedPostAmount — ingen skjult kvittering lenger.
       await updateSettings({
         ekomPhone: { ...settings.ekomPhone, [ys]: phoneMonths },
         ekomInternet: { ...settings.ekomInternet, [ys]: internetQuarters },
         ekomPrivateAmt: parseFloat(String(privateAmt)) || 0,
-        ekomEntryIds: { ...settings.ekomEntryIds, [ys]: entryId || '' },
       })
       onClose()
     } catch (err) {
@@ -281,6 +248,71 @@ function EkomModal({ userId, year, onClose }: { userId: string; year: number; on
   )
 }
 
+// Redigerbar kontoplan. Brukeren kan omdøpe kategorier og legge til/fjerne egne.
+// Systemposter (SYSTEM_POSTS) og poster som har oppføringer kan ikke slettes —
+// ellers ville oppføringene mistet gruppering i rapporten. Postnr på eksisterende
+// kategorier er låst (endring ville foreldreløst-gjort tidligere oppføringer).
+function CategoryEditor({ categories, usedPosts, onSave }: {
+  categories: Category[]
+  usedPosts: Set<string>
+  onSave: (cats: Category[]) => Promise<void>
+}) {
+  const [draft, setDraft] = useState<Category[]>(categories)
+  const [newPost, setNewPost] = useState('')
+  const [newLabel, setNewLabel] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const isError = /^Feil|må|finnes|Fyll/.test(msg)
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(categories)
+  const canDelete = (post: string) => !SYSTEM_POSTS.includes(post) && !usedPosts.has(post)
+
+  function add() {
+    const post = newPost.trim().replace(/\s/g, ''), label = newLabel.trim()
+    if (!post || !label) { setMsg('Fyll inn både postnr og navn.'); return }
+    if (draft.some(c => c.post === post)) { setMsg(`Post ${post} finnes allerede.`); return }
+    setDraft(d => [...d, { post, label }]); setNewPost(''); setNewLabel(''); setMsg('')
+  }
+  async function save() {
+    const trimmed = draft.map(c => ({ post: c.post, label: c.label.trim() }))
+    if (trimmed.some(c => !c.label)) { setMsg('Alle kategorier må ha et navn.'); return }
+    setSaving(true)
+    try { await onSave(trimmed); setMsg('Lagret ✓'); setTimeout(() => setMsg(''), 2000) }
+    catch (e) { setMsg('Feil: ' + (e instanceof Error ? e.message : String(e))) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      <p className="text-xs text-slate-400">Omdøp poster eller legg til egne. Systemposter og poster med oppføringer kan ikke slettes.</p>
+      <div className="space-y-1.5">
+        {draft.map((c, i) => (
+          <div key={c.post} className="flex items-center gap-2">
+            <span className="text-xs font-mono text-slate-400 w-9 shrink-0">{c.post}</span>
+            <input value={c.label} onChange={e => setDraft(d => d.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+              className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button type="button" onClick={() => setDraft(d => d.filter((_, j) => j !== i))} disabled={!canDelete(c.post)}
+              title={canDelete(c.post) ? 'Fjern' : 'Kan ikke slettes (systempost eller har oppføringer)'}
+              className="text-slate-300 hover:text-red-400 disabled:opacity-30 disabled:hover:text-slate-300 shrink-0"><IconTrash /></button>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+        <input value={newPost} onChange={e => setNewPost(e.target.value)} placeholder="Postnr" inputMode="numeric"
+          className="w-16 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Nytt kategorinavn"
+          className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button type="button" onClick={add} title="Legg til" className="text-blue-600 hover:text-blue-700 shrink-0"><IconPlus /></button>
+      </div>
+      {msg && <p className={`text-xs ${isError ? 'text-red-500' : 'text-green-600'}`}>{msg}</p>}
+      <button onClick={save} disabled={saving || !dirty}
+        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm py-2 rounded-lg transition">
+        {saving ? 'Lagrer…' : 'Lagre kategorier'}
+      </button>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const { settings, updateSettings } = useSettings()
@@ -289,6 +321,7 @@ export default function DashboardPage() {
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState(() => parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
+  const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [ratePerKm, setRatePerKm] = useState(settings.drivingRatePerKm)
   const [ratePerPassengerKm, setRatePerPassengerKm] = useState(settings.drivingRatePerPassengerKm)
@@ -298,6 +331,7 @@ export default function DashboardPage() {
   const [showDriving, setShowDriving] = useState(false)
   const [showHjemmekontor, setShowHjemmekontor] = useState(false)
   const [showAvskrivninger, setShowAvskrivninger] = useState(false)
+  const [showCategories, setShowCategories] = useState(false)
   const [hjemmekontorAmt, setHjemmekontorAmt] = useState('')
   const [savingHjemmekontor, setSavingHjemmekontor] = useState(false)
   const [avskrivningerAmt, setAvskrivningerAmt] = useState('')
@@ -374,6 +408,32 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, settings.postNumbersMigrated])
 
+  // Engangs-migrering: slett de skjulte «skygge»-kvitteringene for EKOM/
+  // hjemmekontor/avskrivninger (postene beregnes nå fra settings). Sletter KUN
+  // de eksakt sporede dokument-id-ene fra *EntryIds-kartene — ingen brede treff.
+  // Trygt uansett rekkefølge: totalene teller aldri disse postene som
+  // kvitteringer, så ingenting dobbelttelles før eller etter sletting.
+  useEffect(() => {
+    if (!user || settings.shadowReceiptsRemoved) return
+    const ids = [
+      ...Object.values(settings.ekomEntryIds || {}),
+      ...Object.values(settings.hjemmekontorEntryIds || {}),
+      ...Object.values(settings.avskrivningerEntryIds || {}),
+    ].filter(Boolean)
+    void (async () => {
+      try {
+        for (const id of ids) {
+          try { await deleteDoc(doc(db, 'receipts', id)) } catch { /* alt slettet — ignorer */ }
+        }
+        await updateSettings({
+          shadowReceiptsRemoved: true,
+          ekomEntryIds: {}, hjemmekontorEntryIds: {}, avskrivningerEntryIds: {},
+        })
+      } catch (e) { console.error('Skygge-migrering feilet:', e) }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, settings.shadowReceiptsRemoved])
+
   useEffect(() => {
     if (!user) return
     const q = query(collection(db, 'income'), where('userId', '==', user.uid))
@@ -389,9 +449,16 @@ export default function DashboardPage() {
     return drivingAmount(entry as DrivingEntry, ratePerKm, ratePerPassengerKm)
   }
 
-  const yearEntries = entries.filter(r => r.date.startsWith(String(selectedYear)))
+  // Kvitteringer for året, UTEN de settings-styrte postene (EKOM/hjemmekontor/
+  // avskrivninger). Deres årsbeløp beregnes fra innstillinger, ikke fra skjulte
+  // «skygge»-kvitteringer — så eventuelle gjenværende skyggedokumenter (før
+  // migreringen har kjørt) verken vises i lista eller telles dobbelt.
+  const yearEntries = entries.filter(r =>
+    r.date.startsWith(String(selectedYear)) && !SETTINGS_MANAGED_POSTS.includes(r.category.post))
   const yearIncome = incomeEntries.filter(r => r.date.startsWith(String(selectedYear)))
-  const totalExpenses = yearEntries.reduce((sum, e) => sum + getAmount(e), 0)
+  const managedTotal = SETTINGS_MANAGED_POSTS.reduce(
+    (s, p) => s + (managedPostAmount(p, settings, selectedYear) ?? 0), 0)
+  const totalExpenses = yearEntries.reduce((sum, e) => sum + getAmount(e), 0) + managedTotal
   const totalIncome = yearIncome.reduce((sum, e) => sum + e.amount, 0)
 
   async function handleDelete(entry: Entry) {
@@ -436,15 +503,8 @@ export default function DashboardPage() {
     try {
       const ys = String(selectedYear)
       const amount = parseFloat(hjemmekontorAmt) || 0
-      const category = CATEGORIES.find(c => c.post === '7770')!
-      const updateData = { amount, category, description: 'Hjemmekontor fradrag' }
-      const entryId = await upsertAutoReceipt(
-        settings.hjemmekontorEntryIds[ys], user.uid, `${selectedYear}-12-31`, updateData, amount > 0,
-      )
-      await updateSettings({
-        hjemmekontorAmounts: { ...settings.hjemmekontorAmounts, [ys]: amount },
-        hjemmekontorEntryIds: { ...settings.hjemmekontorEntryIds, [ys]: entryId || '' },
-      })
+      // Kun til settings — post 7770 beregnes fra dette i rapport/oversikt.
+      await updateSettings({ hjemmekontorAmounts: { ...settings.hjemmekontorAmounts, [ys]: amount } })
     } catch (err) {
       alert('Kunne ikke lagre hjemmekontor: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -458,15 +518,8 @@ export default function DashboardPage() {
     try {
       const ys = String(selectedYear)
       const amount = parseFloat(avskrivningerAmt) || 0
-      const category = CATEGORIES.find(c => c.post === '6000')!
-      const updateData = { amount, category, description: 'Avskrivninger (automatisk)' }
-      const entryId = await upsertAutoReceipt(
-        settings.avskrivningerEntryIds[ys], user.uid, `${selectedYear}-12-31`, updateData, amount > 0,
-      )
-      await updateSettings({
-        avskrivningerAmounts: { ...settings.avskrivningerAmounts, [ys]: amount },
-        avskrivningerEntryIds: { ...settings.avskrivningerEntryIds, [ys]: entryId || '' },
-      })
+      // Kun til settings — post 6000 beregnes fra dette i rapport/oversikt.
+      await updateSettings({ avskrivningerAmounts: { ...settings.avskrivningerAmounts, [ys]: amount } })
     } catch (err) {
       alert('Kunne ikke lagre avskrivninger: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -762,7 +815,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.46</span></p>
+              <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">v1.47</span></p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -941,6 +994,25 @@ export default function DashboardPage() {
                 )}
               </div>
 
+              {/* Kategorier */}
+              <div>
+                <button onClick={() => setShowCategories(!showCategories)}
+                  className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 mb-1">
+                  <span>Kategorier</span>
+                  <span className="flex items-center gap-1 text-slate-400 font-normal text-xs">
+                    <span>{(settings.categories ?? CATEGORIES).length}</span>
+                    <IconChevron open={showCategories} />
+                  </span>
+                </button>
+                {showCategories && (
+                  <CategoryEditor
+                    categories={settings.categories ?? CATEGORIES}
+                    usedPosts={new Set(entries.map(e => e.category.post))}
+                    onSave={(cats) => updateSettings({ categories: cats })}
+                  />
+                )}
+              </div>
+
               <div className="border-t border-slate-100 pt-4">
                 <button onClick={() => signOut(auth)}
                   className="w-full text-sm text-red-500 border border-red-200 rounded-lg py-2 hover:bg-red-50 transition">
@@ -1028,7 +1100,7 @@ export default function DashboardPage() {
       )}
 
       {showEkomModal && user && (
-        <EkomModal userId={user.uid} year={selectedYear} onClose={() => setShowEkomModal(false)} />
+        <EkomModal year={selectedYear} onClose={() => setShowEkomModal(false)} />
       )}
 
       {/* Backup modal */}
@@ -1117,12 +1189,15 @@ export default function DashboardPage() {
         const result = totalIncome - totalExpenses
         const drivingEntries = yearEntries.filter(e => e.entryType === 'driving') as DrivingEntry[]
         const totalKm = drivingEntries.reduce((s, d) => s + (d.tripType === 'return' ? d.distance * 2 : d.distance), 0)
-        const expenseCategories = [...CATEGORIES]
-          .filter(cat => cat.post !== '6000' && cat.post !== '7770')
-          .map(cat => ({ ...cat, sum: yearEntries.filter(e => e.category.post === cat.post).reduce((s, e) => s + getAmount(e), 0) }))
-        const hkSum = yearEntries.filter(e => e.category.post === '7770').reduce((s, e) => s + getAmount(e), 0)
-        const avSum = yearEntries.filter(e => e.category.post === '6000').reduce((s, e) => s + getAmount(e), 0)
-        const allCosts = [...expenseCategories, { post: '7770', label: 'Hjemmekontor', sum: hkSum }, { post: '6000', label: 'Avskrivninger', sum: avSum }]
+        // Per-post beløp: settings-styrte poster fra managedPostAmount, resten
+        // summert fra kvitteringer. Samme logikk som rapporten og totalExpenses.
+        const allCosts = (settings.categories ?? CATEGORIES).map(cat => {
+          const managed = managedPostAmount(cat.post, settings, selectedYear)
+          const sum = managed !== null
+            ? managed
+            : yearEntries.filter(e => e.category.post === cat.post).reduce((s, e) => s + getAmount(e), 0)
+          return { post: cat.post, label: cat.label, sum }
+        })
         const activeCosts = allCosts.filter(c => c.sum > 0)
         const topCost = activeCosts.length > 0 ? activeCosts.reduce((a, b) => a.sum > b.sum ? a : b) : null
         const fmt = (n: number) => n.toLocaleString('nb-NO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -1343,7 +1418,7 @@ export default function DashboardPage() {
             className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
             <span>Utstyr</span>
           </button>
-          <button onClick={() => navigate('/add?post=6800')}
+          <button onClick={() => navigate('/add?post=7140')}
             className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
             <span>Mat og drikke</span>
           </button>
@@ -1356,8 +1431,20 @@ export default function DashboardPage() {
         {loading ? (
           <div className="text-center text-slate-400 py-12">Laster...</div>
         ) : (
-          <EntryList entries={yearEntries} expandedId={expandedId} setExpandedId={setExpandedId}
-            onDelete={handleDelete} onEdit={e => navigate(`/add?edit=${e.id}`)} getAmount={getAmount} />
+          <>
+            {yearEntries.length > 0 && (
+              <input
+                type="search"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Søk i oppføringer (beskrivelse, post, beløp, sted)…"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            )}
+            <EntryList entries={filterEntries(yearEntries, search)} expandedId={expandedId} setExpandedId={setExpandedId}
+              onDelete={handleDelete} onEdit={e => navigate(`/add?edit=${e.id}`)} getAmount={getAmount}
+              emptyText={search ? 'Ingen oppføringer matcher søket.' : undefined} />
+          </>
         )}
       </div>
 
@@ -1365,19 +1452,20 @@ export default function DashboardPage() {
   )
 }
 
-function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit, getAmount }: {
+function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit, getAmount, emptyText }: {
   entries: Entry[]
   expandedId: string | null
   setExpandedId: (id: string | null) => void
   onDelete: (e: Entry) => void
   onEdit: (e: Entry) => void
   getAmount: (e: Entry) => number
+  emptyText?: string
 }) {
   if (entries.length === 0) {
     return (
       <div className="text-center py-16 text-slate-400">
-        <p className="text-sm">Ingen oppføringer dette året ennå.</p>
-        <p className="text-xs mt-1">Trykk + for å legge til.</p>
+        <p className="text-sm">{emptyText ?? 'Ingen oppføringer dette året ennå.'}</p>
+        {!emptyText && <p className="text-xs mt-1">Trykk + for å legge til.</p>}
       </div>
     )
   }

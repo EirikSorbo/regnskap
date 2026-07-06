@@ -1,6 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calcDrivingAmount, drivingAmount, calcEkom, type DrivingEntry } from './types.ts'
+import {
+  calcDrivingAmount, drivingAmount, calcEkom, filterEntries, managedPostAmount,
+  parseReceiptText, type DrivingEntry, type Entry,
+} from './types.ts'
 
 // Bygger en komplett DrivingEntry med fornuftige standardverdier; testene
 // overstyrer bare feltene de bryr seg om.
@@ -59,4 +62,66 @@ test('calcEkom: ikke-tall (NaN) behandles som 0', () => {
   const r = calcEkom([NaN, 100], [], 0)
   assert.equal(r.totalPhone, 100)
   assert.equal(r.net, 100)
+})
+
+// --- filterEntries ---
+const receipt: Entry = {
+  id: '1', entryType: 'receipt', userId: 'u', date: '2025-01-01',
+  category: { post: '6500', label: 'Utstyr' }, description: 'Mikrofon', createdAt: 0,
+  amount: 1500, imageUrl: '', imagePath: '',
+}
+const drive: Entry = {
+  ...driving({ from: 'Oslo', to: 'Bergen', tripType: 'return', distance: 100 }),
+  id: '2', date: '2025-02-01',
+}
+const both = [receipt, drive]
+
+test('filterEntries: tomt søk gir alle', () => {
+  assert.equal(filterEntries(both, '').length, 2)
+  assert.equal(filterEntries(both, '   ').length, 2)
+})
+test('filterEntries: matcher beskrivelse, sted, beløp og postnr', () => {
+  assert.deepEqual(filterEntries(both, 'mikrofon').map(e => e.id), ['1'])
+  assert.deepEqual(filterEntries(both, 'bergen').map(e => e.id), ['2'])
+  assert.deepEqual(filterEntries(both, '1500').map(e => e.id), ['1'])
+  assert.deepEqual(filterEntries(both, '6500').map(e => e.id), ['1'])
+})
+test('filterEntries: er case-insensitiv', () => {
+  assert.deepEqual(filterEntries(both, 'UTSTYR').map(e => e.id), ['1'])
+})
+
+// --- managedPostAmount ---
+const ms = {
+  ekomPhone: { '2025': [100, 100] }, ekomInternet: { '2025': [300] }, ekomPrivateAmt: 50,
+  hjemmekontorAmounts: { '2025': 2000 }, avskrivningerAmounts: { '2025': 500 },
+}
+test('managedPostAmount: 7500 = EKOM-netto, 7770/6000 fra settings', () => {
+  assert.equal(managedPostAmount('7500', ms, 2025), 450) // brutto 500 − privat 50
+  assert.equal(managedPostAmount('7770', ms, 2025), 2000)
+  assert.equal(managedPostAmount('6000', ms, 2025), 500)
+})
+test('managedPostAmount: null for ikke-styrte poster; 0 for år uten data', () => {
+  assert.equal(managedPostAmount('6500', ms, 2025), null)
+  assert.equal(managedPostAmount('7770', ms, 2024), 0)
+  assert.equal(managedPostAmount('7500', ms, 2024), 0)
+})
+
+// --- parseReceiptText ---
+test('parseReceiptText: foretrekker beløp på «totalt»-linje og leser dd.mm.åååå', () => {
+  const t = 'Kiwi Storgata\n12.05.2025\nBrød 25,00\nMelk 20,50\nTotalt 45,50'
+  assert.deepEqual(parseReceiptText(t), { amount: 45.5, date: '2025-05-12' })
+})
+test('parseReceiptText: leser åååå-mm-dd og «SUM» med kr-suffiks', () => {
+  const t = 'REMA 1000\nDato 2025-11-03\nSUM 199,90 kr'
+  assert.deepEqual(parseReceiptText(t), { amount: 199.9, date: '2025-11-03' })
+})
+test('parseReceiptText: tusenskille og 2-sifret år', () => {
+  const t = 'Kvittering 03/01/24\nBeløp NOK 1 234,50'
+  assert.deepEqual(parseReceiptText(t), { amount: 1234.5, date: '2024-01-03' })
+})
+test('parseReceiptText: uten nøkkelord tas største pengetall', () => {
+  assert.equal(parseReceiptText('Butikk\n10,00\n250,00\n5,50').amount, 250)
+})
+test('parseReceiptText: heltall uten desimaler (org.nr) plukkes ikke som beløp', () => {
+  assert.deepEqual(parseReceiptText('Org 123456789\nTakk'), {})
 })
