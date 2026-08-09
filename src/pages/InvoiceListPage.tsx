@@ -7,6 +7,7 @@ import { useInvoices } from '../hooks/useInvoices'
 import { type Invoice, statusLabel, isOverdue, outstandingTotal } from '../lib/invoice'
 import { kr } from '../lib/format'
 import { CustomerRegisterModal } from '../components/CustomerRegisterModal'
+import { InvoiceImportModal } from '../components/InvoiceImportModal'
 import { IconArrowLeft, IconPlus } from '../components/icons'
 
 const YEAR_KEY = 'selected_year'
@@ -19,6 +20,7 @@ export default function InvoiceListPage() {
   const [year, setYear] = useState(() => parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
   const [filter, setFilter] = useState<Filter>('alle')
   const [showCustomers, setShowCustomers] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const yearInvoices = invoices.filter(i => i.issueDate.startsWith(String(year)))
@@ -68,19 +70,23 @@ export default function InvoiceListPage() {
 
         <div className="flex gap-2">
           <button onClick={() => navigate('/faktura/ny')}
-            className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition text-sm">
+            className="flex-1 basis-0 min-w-0 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition text-xs">
             <IconPlus /> Ny faktura
           </button>
           <button onClick={() => setShowCustomers(true)}
-            className="flex-1 bg-white border border-slate-200 rounded-xl py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
+            className="flex-1 basis-0 min-w-0 bg-white border border-slate-200 rounded-xl py-3 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
             Kunderegister
+          </button>
+          <button onClick={() => setShowImport(true)}
+            className="flex-1 basis-0 min-w-0 bg-white border border-slate-200 rounded-xl py-3 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
+            Importer
           </button>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           {(['alle', 'kladd', 'utestående', 'betalt'] as Filter[]).map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-sm border transition capitalize ${filter === f ? 'bg-slate-800 text-white border-slate-800' : 'border-slate-300 text-slate-600 hover:bg-white'}`}>
+              className={`flex-1 basis-0 min-w-0 px-2 py-1.5 rounded-lg text-xs font-medium border transition capitalize ${filter === f ? 'bg-slate-800 text-white border-slate-800' : 'border-slate-300 text-slate-600 hover:bg-white'}`}>
               {f}
             </button>
           ))}
@@ -100,6 +106,7 @@ export default function InvoiceListPage() {
       </div>
 
       {showCustomers && <CustomerRegisterModal onClose={() => setShowCustomers(false)} />}
+      {showImport && <InvoiceImportModal existing={invoices} onClose={() => setShowImport(false)} />}
     </div>
   )
 }

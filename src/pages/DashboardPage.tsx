@@ -20,7 +20,7 @@ import { EkomModal } from '../components/EkomModal'
 import { DrivingModal } from '../components/DrivingModal'
 import { ResultModal } from '../components/ResultModal'
 import { ReceiptListModal } from '../components/ReceiptListModal'
-import { IconCar, IconGear, IconOverview, IconPhone, IconPlus } from '../components/icons'
+import { IconCar, IconGear, IconInvoice, IconOverview, IconPhone } from '../components/icons'
 
 const YEAR_KEY = 'selected_year'
 const VERSION = 'v1.51'
@@ -121,6 +121,7 @@ export default function DashboardPage() {
             <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">{VERSION}</span></p>
           </div>
           <div className="flex items-center gap-1">
+            <HeaderButton title="Fakturaer" onClick={() => navigate('/fakturaer')}><IconInvoice /></HeaderButton>
             <HeaderButton title="Kjøring" onClick={() => setModal('driving')}><IconCar /></HeaderButton>
             <HeaderButton title="EKOM-kalkulator" onClick={() => setModal('ekom')}><IconPhone /></HeaderButton>
             <HeaderButton title="Oversikt" onClick={() => setDrawer('overview')}><IconOverview /></HeaderButton>
@@ -200,53 +201,35 @@ export default function DashboardPage() {
 
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
 
+        {/* Årets regnskap i tre tall. Inntekten er den regnskapet fører, altså
+            fakturaer på fakturadato pluss inntekt ført manuelt — samme tall som
+            årsrapporten viser, slik at ingen skjerm i appen sier noe annet. */}
         <div className="bg-blue-600 text-white rounded-2xl p-5">
-          {totalIncome > 0 ? (
-            <>
-              <p className="text-sm text-blue-100">Regnskap {selectedYear}</p>
-              <div className="mt-3 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-100">Inntekter</span>
-                  <span className="text-sm font-semibold">{kr(totalIncome)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-100">Utgifter</span>
-                  <span className="text-sm font-semibold">−{kr(totalExpenses)}</span>
-                </div>
-                <div className="border-t border-white/20 pt-1.5 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-blue-100">Resultat</span>
-                  <span className="text-xl font-bold">{kr(totalIncome - totalExpenses)}</span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-blue-100">Totale utgifter {selectedYear}</p>
-              <p className="text-3xl font-bold mt-1">{kr(totalExpenses)}</p>
-            </>
-          )}
-          <div className="flex items-center justify-between mt-2">
-            <p className="text-xs text-blue-200">{yearEntries.length} oppføringer</p>
-            <button onClick={() => navigate('/add')}
-              className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
-              <IconPlus />
-              Legg til utgift
-            </button>
+          <p className="text-sm text-blue-100">Regnskap {selectedYear}</p>
+          <div className="mt-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-blue-100">Inntekter</span>
+              <span className="text-sm font-semibold">{kr(totalIncome)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-blue-100">Utgifter</span>
+              <span className="text-sm font-semibold">−{kr(totalExpenses)}</span>
+            </div>
+            <div className="border-t border-white/20 pt-1.5 flex items-center justify-between">
+              <span className="text-sm font-semibold text-blue-100">Resultat</span>
+              <span className="text-xl font-bold">{kr(totalIncome - totalExpenses)}</span>
+            </div>
           </div>
+          <p className="text-xs text-blue-200 mt-3">{yearEntries.length} oppføringer</p>
         </div>
 
         <BackupReminder lastBackupAt={settings.lastBackupAt} busy={busy} onBackup={() => handleFullBackup()} />
-
-        <button onClick={() => navigate('/fakturaer')}
-          className="w-full flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
-          <span>Fakturaer</span>
-          <span className="text-slate-400 text-base">→</span>
-        </button>
 
         <div className="flex gap-2">
           <QuickAdd label="Utstyr" onClick={() => navigate('/add?post=6500')} />
           <QuickAdd label="Mat og drikke" onClick={() => navigate('/add?post=7140')} />
           <QuickAdd label="Kjøring" onClick={() => navigate('/add?type=driving')} />
+          <QuickAdd label="Annet" primary onClick={() => navigate('/add')} />
         </div>
 
         {loading ? (
@@ -277,11 +260,17 @@ function HeaderButton({ title, onClick, children }: { title: string; onClick: ()
   )
 }
 
-function QuickAdd({ label, onClick }: { label: string; onClick: () => void }) {
+/** Snarvei til ny utgift. Fire på rad, så de er smale: teksten får bryte
+ *  framfor å flyte utenfor knappen. «Annet» er blå fordi den er den generelle
+ *  inngangen, de tre andre er forhåndsvalgte kategorier. */
+function QuickAdd({ label, onClick, primary }: { label: string; onClick: () => void; primary?: boolean }) {
+  const style = primary
+    ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700'
+    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
   return (
     <button onClick={onClick}
-      className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
-      <span>{label}</span>
+      className={`flex-1 basis-0 min-w-0 border rounded-xl px-2 py-2.5 text-xs font-medium leading-tight shadow-sm transition ${style}`}>
+      {label}
     </button>
   )
 }
