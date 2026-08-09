@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   type Invoice, lineTotal, invoiceTotal, addDays, isOverdue, outstandingTotal,
   canEdit, canDelete, canCredit, statusLabel, validateForIssue,
-  incomeAmount, incomeDescription, addressLines, numberGaps,
+  incomeAmount, incomeDescription, addressLines, numberGaps, invoiceFileName,
 } from './invoice.ts'
 
 function invoice(p: Partial<Invoice> = {}): Invoice {
@@ -130,6 +130,30 @@ test('addressLines: postnummer og sted på én linje, Norge utelates', () => {
 test('addressLines: utenlandsk land tas med', () => {
   assert.deepEqual(addressLines({ name: 'Anna', address: 'Kungsgatan 2', postalCode: '11135', city: 'Stockholm', country: 'Sverige' }),
     ['Kungsgatan 2', '11135 Stockholm', 'Sverige'])
+})
+
+// --- filnavn på PDF-en ---
+
+test('invoiceFileName: «Faktura nr. 272 fra Sørbø Musikk»', () => {
+  assert.equal(invoiceFileName({ kind: 'faktura', number: 272 }, 'Sørbø Musikk'),
+    'Faktura nr. 272 fra Sørbø Musikk')
+})
+
+test('invoiceFileName: kreditnota og kladd får sine egne navn', () => {
+  assert.equal(invoiceFileName({ kind: 'kreditnota', number: 273 }, 'Sørbø Musikk'),
+    'Kreditnota nr. 273 fra Sørbø Musikk')
+  assert.equal(invoiceFileName({ kind: 'faktura', number: undefined }, 'Sørbø Musikk'),
+    'Faktura uten nummer fra Sørbø Musikk')
+})
+
+test('invoiceFileName: uten foretaksnavn faller «fra …» bort', () => {
+  assert.equal(invoiceFileName({ kind: 'faktura', number: 5 }, ''), 'Faktura nr. 5')
+  assert.equal(invoiceFileName({ kind: 'faktura', number: 5 }, undefined), 'Faktura nr. 5')
+})
+
+test('invoiceFileName: tegn som ikke kan stå i et filnavn byttes ut', () => {
+  assert.equal(invoiceFileName({ kind: 'faktura', number: 5 }, 'Lyd/Bilde AS'),
+    'Faktura nr. 5 fra Lyd-Bilde AS')
 })
 
 // --- nummerrekke ---

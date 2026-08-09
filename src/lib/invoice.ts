@@ -157,6 +157,21 @@ export function incomeAmount(inv: Pick<Invoice, 'kind' | 'total'>): number {
   return inv.kind === 'kreditnota' ? -Math.abs(inv.total) : inv.total
 }
 
+/** Navnet PDF-en foreslås lagret som.
+ *
+ *  Nettleseren henter filnavnet fra sidens tittel når du velger «Lagre som
+ *  PDF», så det er tittelen vi setter. Skråstrek og kolon fjernes, siden de
+ *  ikke kan stå i et filnavn og ellers ville blitt til noe uleselig. */
+export function invoiceFileName(
+  inv: Pick<Invoice, 'kind' | 'number'>,
+  companyName?: string,
+): string {
+  const label = inv.kind === 'kreditnota' ? 'Kreditnota' : 'Faktura'
+  const base = inv.number ? `${label} nr. ${inv.number}` : `${label} uten nummer`
+  const from = companyName?.trim() ? ` fra ${companyName.trim()}` : ''
+  return `${base}${from}`.replace(/[/\\:*?"<>|]/g, '-')
+}
+
 /** Kunden uten registermetadata (id, eier, opprettet), klar til å fryses på en
  *  faktura. Feltene plukkes eksplisitt: da kan ikke et nytt registerfelt havne
  *  på fakturaen ved et uhell. */

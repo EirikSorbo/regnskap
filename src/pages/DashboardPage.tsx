@@ -23,7 +23,7 @@ import { ReceiptListModal } from '../components/ReceiptListModal'
 import { IconCar, IconGear, IconInvoice, IconOverview, IconPhone } from '../components/icons'
 
 const YEAR_KEY = 'selected_year'
-const VERSION = 'v1.53'
+const VERSION = 'v1.54'
 
 // De to lagene over forsiden. Erstatter sju uavhengige boolske flagg. Skuff og
 // modal er skilt fordi modalene åpnes OPPÅ oversiktsskuffen: lukker du modalen,

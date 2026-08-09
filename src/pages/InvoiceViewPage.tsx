@@ -7,7 +7,7 @@ import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import {
-  type Invoice, lineTotal, addressLines, statusLabel, canEdit, canDelete, canCredit,
+  type Invoice, lineTotal, addressLines, statusLabel, canEdit, canDelete, canCredit, invoiceFileName,
 } from '../lib/invoice'
 import { issueInvoice, markPaid, markUnpaid, deleteDraft, createCreditNote } from '../lib/invoice-store'
 import { kr } from '../lib/format'
@@ -38,6 +38,16 @@ export default function InvoiceViewPage() {
       setLoading(false)
     })
   }, [id, navigate])
+
+  // Nettleseren foreslår sidens tittel som filnavn når du lagrer som PDF. Vi
+  // setter den mens fakturaen er åpen, og legger den tilbake når du går videre,
+  // slik at resten av appen beholder sitt eget navn i fanen.
+  useEffect(() => {
+    if (!invoice) return
+    const previous = document.title
+    document.title = invoiceFileName(invoice, settings.company?.name)
+    return () => { document.title = previous }
+  }, [invoice, settings.company?.name])
 
   async function run(fn: () => Promise<void>) {
     setBusy(true); setError('')
