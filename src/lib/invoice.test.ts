@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   type Invoice, lineTotal, invoiceTotal, addDays, isOverdue, outstandingTotal,
   canEdit, canDelete, canCredit, statusLabel, validateForIssue,
-  incomeAmount, incomeDescription, addressLines, numberGaps, invoiceFileName,
+  incomeAmount, incomeDescription, addressLines, numberGaps, invoiceFileName, toInvoiceCustomer,
 } from './invoice.ts'
 
 function invoice(p: Partial<Invoice> = {}): Invoice {
@@ -130,6 +130,30 @@ test('addressLines: postnummer og sted på én linje, Norge utelates', () => {
 test('addressLines: utenlandsk land tas med', () => {
   assert.deepEqual(addressLines({ name: 'Anna', address: 'Kungsgatan 2', postalCode: '11135', city: 'Stockholm', country: 'Sverige' }),
     ['Kungsgatan 2', '11135 Stockholm', 'Sverige'])
+})
+
+// --- kunde fryst på faktura ---
+
+test('toInvoiceCustomer: felter som ikke er fylt ut UTELATES, ikke satt til undefined', () => {
+  // Regresjon: en kunde uten «Adresse 2» ga address2: undefined, og Firestore
+  // avviste hele fakturaen med «Unsupported field value: undefined».
+  const picked = toInvoiceCustomer({ name: 'Kari', address: 'Storgata 1' })
+  assert.deepEqual(picked, { name: 'Kari', address: 'Storgata 1' })
+  assert.equal(Object.hasOwn(picked, 'address2'), false)
+})
+
+test('toInvoiceCustomer: tar med alle utfylte felter, men ikke registermetadata', () => {
+  const picked = toInvoiceCustomer({
+    name: 'Eksempel AS', address: 'Gata 1', address2: 'Inngang B', postalCode: '4610',
+    city: 'KRISTIANSAND S', country: 'Norge', email: 'post@eksempel.no',
+    phone: '40012345', orgNumber: '912345678',
+    // Felter registeret har, men fakturaen ikke skal bære:
+    ...{ id: 'abc', userId: 'u', createdAt: 1 },
+  })
+  assert.equal(Object.hasOwn(picked, 'id'), false)
+  assert.equal(Object.hasOwn(picked, 'userId'), false)
+  assert.equal(picked.address2, 'Inngang B')
+  assert.equal(picked.orgNumber, '912345678')
 })
 
 // --- filnavn på PDF-en ---

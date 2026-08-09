@@ -172,21 +172,25 @@ export function invoiceFileName(
   return `${base}${from}`.replace(/[/\\:*?"<>|]/g, '-')
 }
 
+/** Feltene en kunde består av på en faktura. Listet eksplisitt, slik at et nytt
+ *  felt i kunderegisteret ikke havner på fakturaen ved et uhell. */
+const CUSTOMER_FIELDS = [
+  'name', 'address', 'address2', 'postalCode', 'city', 'country', 'email', 'phone', 'orgNumber',
+] as const
+
 /** Kunden uten registermetadata (id, eier, opprettet), klar til å fryses på en
- *  faktura. Feltene plukkes eksplisitt: da kan ikke et nytt registerfelt havne
- *  på fakturaen ved et uhell. */
+ *  faktura.
+ *
+ *  Felter som ikke er fylt ut UTELATES i stedet for å settes til undefined.
+ *  Firestore avviser undefined som feltverdi, så en kunde uten «Adresse 2» ga
+ *  «Unsupported field value: undefined» i det fakturaen skulle lagres. */
 export function toInvoiceCustomer(c: InvoiceCustomer): InvoiceCustomer {
-  return {
-    name: c.name,
-    address: c.address,
-    address2: c.address2,
-    postalCode: c.postalCode,
-    city: c.city,
-    country: c.country,
-    email: c.email,
-    phone: c.phone,
-    orgNumber: c.orgNumber,
+  const out = { name: c.name } as InvoiceCustomer
+  for (const key of CUSTOMER_FIELDS) {
+    const v = c[key]
+    if (v !== undefined) out[key] = v
   }
+  return out
 }
 
 /** Numrene som mangler i en fakturarekke. Bokføringsreglene krever en

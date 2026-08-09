@@ -6,6 +6,7 @@
 
 import { collection, doc, addDoc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore'
 import { db } from '../firebase'
+import { stripUndefined } from './firestore-data'
 import {
   type Invoice, type InvoiceCustomer, type InvoiceLine,
   invoiceTotal, validateForIssue, incomeAmount, incomeDescription, addDays,
@@ -28,7 +29,10 @@ function draftFields(uid: string, input: DraftInput) {
     quantity: Number(l.quantity) || 0,
     unitPrice: Number(l.unitPrice) || 0,
   }))
-  return {
+  // Siste skanse mot undefined-felter: Firestore avviser dem, og feilen kommer
+  // først når du trykker lagre. Kunden kan komme både fra registeret og fra
+  // skjemaet, så vi renser her framfor å stole på hver enkelt kilde.
+  return stripUndefined({
     userId: uid,
     kind: input.kind ?? 'faktura',
     status: 'kladd' as const,
@@ -39,7 +43,7 @@ function draftFields(uid: string, input: DraftInput) {
     note: input.note ?? '',
     total: invoiceTotal(lines),
     ...(input.creditsInvoiceId ? { creditsInvoiceId: input.creditsInvoiceId } : {}),
-  }
+  })
 }
 
 export async function createDraft(uid: string, input: DraftInput): Promise<string> {

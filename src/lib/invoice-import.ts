@@ -11,6 +11,7 @@
 
 import { collection, doc, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
+import { stripUndefined } from './firestore-data'
 import { type Invoice, incomeAmount, incomeDescription } from './invoice'
 import type { ParsedInvoice } from './invoices-csv'
 import type { UserSettings } from '../context/SettingsContext'
@@ -91,7 +92,7 @@ export async function importInvoices(opts: {
         booked++
       }
 
-      batch.set(doc(db, 'invoices', id), fields)
+      batch.set(doc(db, 'invoices', id), stripUndefined(fields))
       done++
     }
     await batch.commit()
