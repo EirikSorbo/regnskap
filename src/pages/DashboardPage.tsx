@@ -20,16 +20,17 @@ import { EkomModal } from '../components/EkomModal'
 import { DrivingModal } from '../components/DrivingModal'
 import { ResultModal } from '../components/ResultModal'
 import { ReceiptListModal } from '../components/ReceiptListModal'
+import { YearChartModal } from '../components/YearChartModal'
 import { IconCar, IconGear, IconInvoice, IconOverview, IconPhone } from '../components/icons'
 
 const YEAR_KEY = 'selected_year'
-const VERSION = 'v1.56'
+const VERSION = 'v1.57'
 
 // De to lagene over forsiden. Erstatter sju uavhengige boolske flagg. Skuff og
 // modal er skilt fordi modalene åpnes OPPÅ oversiktsskuffen: lukker du modalen,
 // skal du tilbake til skuffen, ikke helt ut.
 type DrawerName = 'settings' | 'overview' | null
-type ModalName = 'ekom' | 'driving' | 'result' | 'receipts' | 'backup' | null
+type ModalName = 'ekom' | 'driving' | 'result' | 'receipts' | 'backup' | 'chart' | null
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -62,6 +63,9 @@ export default function DashboardPage() {
 
   const groups = postSums(categories, yearEntries, settings, selectedYear, amountOf)
   const totalExpenses = groups.reduce((s, g) => s + g.sum, 0)
+  // Årsbeløpene som ikke har en måned (EKOM, hjemmekontor, avskrivninger).
+  // Grafen trenger dem for seg, siden de ikke kan tegnes som søyler.
+  const managedExpenses = groups.filter(g => g.managed).reduce((s, g) => s + g.sum, 0)
   const totalIncome = yearIncome.reduce((s, e) => s + e.amount, 0)
 
   const trips = yearEntries.filter(e => e.entryType === 'driving') as DrivingEntry[]
@@ -147,6 +151,7 @@ export default function DashboardPage() {
           attachmentCount={entries.reduce((s, e) =>
             s + (e.entryType === 'receipt' ? getImageUrls(e as ReceiptEntry).length : 0), 0)}
           onOpenResult={() => setModal('result')}
+          onOpenChart={() => setModal('chart')}
           onOpenReport={() => { setDrawer(null); navigate(`/rapport?year=${selectedYear}`) }}
           onOpenReceipts={() => setModal('receipts')}
           onOpenBackup={() => setModal('backup')}
@@ -199,6 +204,17 @@ export default function DashboardPage() {
         <ReceiptListModal entries={entries} onClose={() => setModal(null)} />
       )}
 
+      {modal === 'chart' && (
+        <YearChartModal
+          year={selectedYear}
+          entries={yearEntries}
+          incomeEntries={yearIncome}
+          amountOf={amountOf}
+          managedExpenses={managedExpenses}
+          onClose={() => setModal(null)}
+        />
+      )}
+
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
 
         {/* Årets regnskap i tre tall. Inntekten er den regnskapet fører, altså
@@ -220,7 +236,6 @@ export default function DashboardPage() {
               <span className="text-xl font-bold">{kr(totalIncome - totalExpenses)}</span>
             </div>
           </div>
-          <p className="text-xs text-blue-200 mt-3">{yearEntries.length} oppføringer</p>
         </div>
 
         <BackupReminder lastBackupAt={settings.lastBackupAt} busy={busy} onBackup={() => handleFullBackup()} />
