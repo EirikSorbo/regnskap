@@ -17,6 +17,8 @@ export interface DraftInput {
   customer: InvoiceCustomer
   lines: InvoiceLine[]
   issueDate: string
+  deliveryDate?: string
+  deliveryPlace?: string
   dueDate?: string
   note?: string
   kind?: Invoice['kind']
@@ -39,6 +41,11 @@ function draftFields(uid: string, input: DraftInput) {
     customer: input.customer,
     lines,
     issueDate: input.issueDate,
+    // Leveringstidspunktet er som regel fakturadatoen, og leveringsstedet
+    // kundens sted. Vi lagrer den utledede verdien, ikke bare et tomt felt, så
+    // dokumentet er komplett i seg selv.
+    deliveryDate: input.deliveryDate || input.issueDate,
+    deliveryPlace: (input.deliveryPlace || input.customer.city || '').trim(),
     dueDate: input.dueDate || addDays(input.issueDate, DEFAULT_PAYMENT_TERMS_DAYS),
     note: input.note ?? '',
     total: invoiceTotal(lines),
@@ -122,6 +129,9 @@ export async function createCreditNote(uid: string, original: Invoice, issueDate
     customer: original.customer,
     lines: original.lines,
     issueDate,
+    // Kreditnotaen gjelder den samme leveransen som fakturaen den retter.
+    deliveryDate: original.deliveryDate,
+    deliveryPlace: original.deliveryPlace,
     note: `Kreditnota for faktura ${original.number ?? ''}`.trim(),
   })
 }

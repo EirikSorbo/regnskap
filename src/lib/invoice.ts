@@ -59,6 +59,12 @@ export interface Invoice {
   lines: InvoiceLine[]
   /** Fakturadatoen. Denne styrer hvilket år inntekten havner i. */
   issueDate: string
+  /** Når og hvor ytelsen ble levert. Bokføringsforskriften § 5-1-1 krever at
+   *  salgsdokumentet angir tidspunkt og sted for levering, og for en spillejobb
+   *  er det dessuten den opplysningen kunden kjenner igjen. Mangler på fakturaer
+   *  importert fra det gamle systemet, som ikke hadde feltene i eksporten. */
+  deliveryDate?: string
+  deliveryPlace?: string
   dueDate: string
   paidDate?: string
   note?: string

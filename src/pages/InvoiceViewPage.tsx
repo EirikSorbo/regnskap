@@ -169,6 +169,8 @@ export default function InvoiceViewPage() {
           </div>
           <div className="text-sm">
             <Row label={isCredit ? 'Kreditnotadato' : 'Fakturadato'} value={fmtDate(invoice.issueDate)} />
+            {invoice.deliveryDate && <Row label="Leveringsdato" value={fmtDate(invoice.deliveryDate)} />}
+            {invoice.deliveryPlace && <Row label="Leveringssted" value={invoice.deliveryPlace} />}
             {!isCredit && <Row label="Forfallsdato" value={fmtDate(invoice.dueDate)} />}
             {invoice.paidDate && <Row label="Betalt" value={fmtDate(invoice.paidDate)} />}
             {company.bankAccount && <Row label="Kontonummer" value={company.bankAccount} />}
@@ -207,14 +209,25 @@ export default function InvoiceViewPage() {
         {/* Bunnfeltet skyves ned til bunnen av arket ved utskrift, se
             .invoice-footer i index.css. Logoen står diskret til venstre, i
             samme dempede tone som resten av småteksten. */}
-        <div className="invoice-footer mt-16 pt-5 border-t border-slate-200 flex items-end justify-between gap-6">
-          <Logo className="w-12 h-12 text-slate-400 shrink-0" />
-          <div className="text-xs text-slate-500 space-y-1 text-right">
-            {!isCredit && company.bankAccount && (
-              <p>Betales til konto {company.bankAccount} innen {fmtDate(invoice.dueDate)}.</p>
-            )}
-            {isCredit && invoice.creditsInvoiceId && <p>Denne kreditnotaen gjelder en tidligere utstedt faktura.</p>}
-            {company.name && <p>{company.name}{company.orgNumber ? ` · Org.nr. ${company.orgNumber}` : ''}</p>}
+        <div className="invoice-footer mt-16">
+          {/* Vilkårene ved for sen betaling. Står bare på fakturaer: en
+              kreditnota er ikke et betalingskrav, så teksten gir ingen mening
+              der. */}
+          {!isCredit && (
+            <p className="text-[10px] italic text-slate-400 leading-snug">
+              Ved betaling etter forfall kan det påløpe renter og gebyr etter statens satser.
+              Ved innsigelse vil kravet kunne bli sendt til forliksrådet, jf. tvistelovens § 5-2.
+            </p>
+          )}
+          <div className="mt-3 pt-5 border-t border-slate-200 flex items-end justify-between gap-6">
+            <Logo className="w-12 h-12 text-slate-400 shrink-0" />
+            <div className="text-xs text-slate-500 space-y-1 text-right">
+              {!isCredit && company.bankAccount && (
+                <p>Betales til konto {company.bankAccount} innen {fmtDate(invoice.dueDate)}.</p>
+              )}
+              {isCredit && invoice.creditsInvoiceId && <p>Denne kreditnotaen gjelder en tidligere utstedt faktura.</p>}
+              {company.name && <p>{company.name}{company.orgNumber ? ` · Org.nr. ${company.orgNumber}` : ''}</p>}
+            </div>
           </div>
         </div>
       </div>
