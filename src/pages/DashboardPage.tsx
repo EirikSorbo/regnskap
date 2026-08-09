@@ -23,7 +23,7 @@ import { ReceiptListModal } from '../components/ReceiptListModal'
 import { IconCar, IconGear, IconOverview, IconPhone, IconPlus } from '../components/icons'
 
 const YEAR_KEY = 'selected_year'
-const VERSION = 'v1.49'
+const VERSION = 'v1.50'
 
 // De to lagene over forsiden. Erstatter sju uavhengige boolske flagg. Skuff og
 // modal er skilt fordi modalene åpnes OPPÅ oversiktsskuffen: lukker du modalen,
@@ -89,7 +89,7 @@ export default function DashboardPage() {
     finally { setBusy(false) }
   }
 
-  const handleBackup = (year?: number) => run(() => downloadJsonBackup(user!.uid, settings, year))
+  const handleBackup = (year?: number) => run(() => downloadJsonBackup(user!.uid, settings, categories, year))
 
   const handleZip = (year?: number) => run(async () => {
     const res = await downloadAttachmentZip(user!.uid, categories, year)

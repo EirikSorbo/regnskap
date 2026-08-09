@@ -98,15 +98,42 @@ test('importableEntries: egne rader og rader uten eier, aldri andres', () => {
   assert.deepEqual(importableEntries(undefined, 'meg'), [])
 })
 
-test('findAttachmentPath: finner vedlegg nummer to på en kvittering', () => {
-  // Regresjon: matchingen så bare på det gamle enkeltfeltet imagePath, så alt
-  // etter det første vedlegget lå i ZIP-en men kom aldri tilbake i Storage.
-  const receipts = [{ id: 'a', imagePath: 'receipts/u/en.jpg', imagePaths: ['receipts/u/en.jpg', 'receipts/u/to.jpg'] }]
-  assert.equal(findAttachmentPath(receipts, '6500-2025-03-01-002.jpg'), null)
-  assert.equal(findAttachmentPath(receipts, 'to.jpg'), 'receipts/u/to.jpg')
-  assert.equal(findAttachmentPath(receipts, 'en.jpg'), 'receipts/u/en.jpg')
+test('findAttachmentPath: vedleggsregisteret fører ZIP-navnet tilbake til Storage-stien', () => {
+  // Kjernen i saken: filen i ZIP-en heter post-dato-løpenummer, mens stien i
+  // Storage slutter på et tilfeldig unikt ledd. Uten registeret finnes det
+  // ingen vei tilbake, og vedleggene ble stille hoppet over ved import.
+  const data = {
+    attachments: [
+      { stdName: '6500-2025-03-01-001.jpg', path: 'receipts/u/6500-2025-03-01-mc4k2b0-a1b2c3.jpg' },
+      { stdName: '6500-2025-03-01-002.jpg', path: 'receipts/u/6500-2025-03-01-mc4k2b1-d4e5f6.jpg' },
+    ],
+    receipts: [{ id: 'a' }],
+  }
+  assert.equal(findAttachmentPath(data, '6500-2025-03-01-002.jpg'), 'receipts/u/6500-2025-03-01-mc4k2b1-d4e5f6.jpg')
+})
+
+test('findAttachmentPath: med register er ukjent navn null, ikke et heuristisk treff', () => {
+  // Registeret er fasit. Faller vi tilbake til navnematching her, risikerer vi
+  // å laste opp én kvitterings bilde til en annen kvitterings sti.
+  const data = {
+    attachments: [{ stdName: '6500-2025-03-01-001.jpg', path: 'receipts/u/unik.jpg' }],
+    receipts: [{ id: 'a', imagePath: 'receipts/u/6500-2025-03-01-002.jpg' }],
+  }
+  assert.equal(findAttachmentPath(data, '6500-2025-03-01-002.jpg'), null)
+})
+
+test('findAttachmentPath: eldre backup uten register matcher fortsatt på filnavn', () => {
+  const data = { receipts: [{ id: 'a', imagePath: 'receipts/u/en.jpg', imagePaths: ['receipts/u/en.jpg', 'receipts/u/to.jpg'] }] }
+  assert.equal(findAttachmentPath(data, 'to.jpg'), 'receipts/u/to.jpg')
+  assert.equal(findAttachmentPath(data, 'en.jpg'), 'receipts/u/en.jpg')
 })
 
 test('findAttachmentPath: ukjent filnavn gir null i stedet for feil sti', () => {
-  assert.equal(findAttachmentPath([{ id: 'a', imagePath: 'x/en.jpg' }], 'ukjent.jpg'), null)
+  assert.equal(findAttachmentPath({ receipts: [{ id: 'a', imagePath: 'x/en.jpg' }] }, 'ukjent.jpg'), null)
+})
+
+test('buildBackupData: vedleggsregisteret blir med i backupen', () => {
+  const attachments = [{ stdName: '6500-2025-03-01-001.jpg', path: 'receipts/u/unik.jpg' }]
+  const data = buildBackupData({ receipts: [], income: [], attachments })
+  assert.deepEqual(data.attachments, attachments)
 })

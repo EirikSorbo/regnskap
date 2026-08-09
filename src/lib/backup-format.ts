@@ -40,6 +40,11 @@ export interface BackupData {
   settings?: Record<string, unknown>
   exportedAt?: string
   year?: number | string
+  /** Fasit for hvilken Storage-sti hvert vedlegg i ZIP-en hører hjemme på.
+   *  Uten denne kunne ikke importen finne veien tilbake: filene i ZIP-en har
+   *  standardiserte navn (post-dato-løpenummer), mens stiene i Storage har et
+   *  tilfeldig unikt ledd. Eldre backuper mangler feltet. */
+  attachments?: Attachment[]
 }
 
 /** Alle vedlegg i eksportrekkefølge: kontoplanens rekkefølge, og innenfor hver
@@ -90,16 +95,18 @@ export function buildBackupData(input: {
   receipts: BackupEntry[]
   income: BackupEntry[]
   settings?: Record<string, unknown>
+  attachments?: Attachment[]
   yearFilter?: number
   now?: Date
 }): BackupData {
-  const { receipts, income, settings, yearFilter, now = new Date() } = input
+  const { receipts, income, settings, attachments, yearFilter, now = new Date() } = input
   return {
     exportedAt: now.toISOString(),
     year: yearFilter ?? 'alle',
     receipts: receipts.filter((r) => matchesYear(r, yearFilter)),
     income: income.filter((i) => matchesYear(i, yearFilter)),
     settings: yearFilter ? undefined : settings,
+    attachments,
   }
 }
 
@@ -126,18 +133,26 @@ export function importableEntries(list: BackupEntry[] | undefined, uid: string):
   return (list ?? []).filter((r) => !r.userId || r.userId === uid)
 }
 
-/** Storage-stien et vedlegg fra ZIP-en hører hjemme på, funnet ved å matche
- *  filnavnet mot kvitteringenes stier.
+/** Storage-stien et vedlegg fra ZIP-en hører hjemme på.
  *
- *  Ser på HELE imagePaths-lista, ikke bare det gamle enkeltfeltet imagePath.
- *  Med bare imagePath ble vedlegg nummer to og utover på en kvittering aldri
- *  lastet opp igjen ved gjenoppretting: bildene lå i ZIP-en, men havnet aldri
- *  tilbake i Storage. */
+ *  Har backupen et vedleggsregister, er det fasit, og et navn som ikke står der
+ *  gir null. Det er hele poenget: filene i ZIP-en heter post-dato-løpenummer,
+ *  mens stiene i Storage slutter på et tilfeldig unikt ledd, så navnet alene
+ *  kan ikke føre tilbake til stien.
+ *
+ *  Eldre backuper mangler registeret. For dem faller vi tilbake til å matche
+ *  filnavnet mot slutten av kvitteringenes stier. Det virker bare for de aller
+ *  eldste vedleggene (de som ble lagret med løpenummer i stien, før v1.45), og
+ *  kan i verste fall treffe feil kvittering med samme post og dato. Derfor er
+ *  det siste utvei og ikke hovedveien. */
 export function findAttachmentPath(
-  receipts: BackupEntry[] | undefined,
+  data: Pick<BackupData, 'attachments' | 'receipts'>,
   fileName: string,
 ): string | null {
-  for (const r of receipts ?? []) {
+  if (data.attachments?.length) {
+    return data.attachments.find((a) => a.stdName === fileName)?.path ?? null
+  }
+  for (const r of data.receipts ?? []) {
     const paths = [
       ...(Array.isArray(r.imagePaths) ? r.imagePaths : []),
       ...(typeof r.imagePath === 'string' ? [r.imagePath] : []),

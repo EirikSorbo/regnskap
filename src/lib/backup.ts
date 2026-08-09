@@ -77,10 +77,16 @@ async function addAttachments(
   return { added, errors }
 }
 
-/** Bare dataene, som JSON. */
-export async function downloadJsonBackup(uid: string, settings: UserSettings, yearFilter?: number) {
+/** Bare dataene, som JSON. Vedleggsregisteret er med selv om filene ikke er
+ *  det, slik at en JSON-backup kan pares med en separat vedleggs-ZIP. */
+export async function downloadJsonBackup(uid: string, settings: UserSettings, categories: Category[], yearFilter?: number) {
   const { receipts, income } = await fetchUserData(uid)
-  const data = buildBackupData({ receipts, income, settings: { ...settings }, yearFilter })
+  const entries = receipts.filter((e) => !yearFilter || e.date?.startsWith(String(yearFilter)))
+  const data = buildBackupData({
+    receipts, income, settings: { ...settings },
+    attachments: buildAttachmentMap(entries, categories),
+    yearFilter,
+  })
   downloadBlob(
     new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
     backupFileName('data', yearFilter, today()),
@@ -114,12 +120,13 @@ export async function downloadFullBackup(
   yearFilter?: number,
 ): Promise<{ added: number; errors: string[] }> {
   const { receipts, income } = await fetchUserData(uid)
-  const data = buildBackupData({ receipts, income, settings: { ...settings }, yearFilter })
+  const entries = receipts.filter((e) => !yearFilter || e.date?.startsWith(String(yearFilter)))
+  const attachments = buildAttachmentMap(entries, categories)
+  const data = buildBackupData({ receipts, income, settings: { ...settings }, attachments, yearFilter })
   const { default: JSZip } = await import('jszip')
   const zip = new JSZip()
   zip.file(backupFileName('data', yearFilter, today()), JSON.stringify(data, null, 2))
-  const entries = receipts.filter((e) => !yearFilter || e.date?.startsWith(String(yearFilter)))
-  const result = await addAttachments(zip, buildAttachmentMap(entries, categories), 'vedlegg/')
+  const result = await addAttachments(zip, attachments, 'vedlegg/')
   downloadBlob(await zip.generateAsync({ type: 'blob' }), backupFileName('full', yearFilter, today()))
   return result
 }
@@ -217,16 +224,18 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   await writeAll(data.income ?? [], 'income')
 
   let filesUploaded = 0
+  let filesUnmatched = 0
   if (attachmentFiles.length > 0) {
     onStatus(`Laster opp ${attachmentFiles.length} vedlegg...`)
     for (const af of attachmentFiles) {
-      const path = findAttachmentPath(data.receipts, af.name)
-      if (!path) continue
+      const path = findAttachmentPath(data, af.name)
+      if (!path) { filesUnmatched++; continue }
       try {
         await uploadBytes(ref(storage, path), af.blob)
         filesUploaded++
       } catch (err) {
         console.warn('Vedlegg-feil:', af.name, err)
+        filesUnmatched++
       }
     }
   }
@@ -243,6 +252,10 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   const parts = [`${count} importert`]
   if (skipped > 0) parts.push(`${skipped} duplikater hoppet over`)
   if (filesUploaded > 0) parts.push(`${filesUploaded} vedlegg lastet opp`)
+  // Vedlegg som ikke lot seg plassere skal SIES fra om. Før ble de bare hoppet
+  // over i stillhet, så en backup kunne se vellykket ut uten å ha ført bildene
+  // tilbake i det hele tatt.
+  if (filesUnmatched > 0) parts.push(`${filesUnmatched} vedlegg uten treff (gammel backup uten vedleggsregister)`)
   if (mode === 'restore') parts.unshift('Gjenopprettet')
   return `✓ ${parts.join(', ')}.`
 }
