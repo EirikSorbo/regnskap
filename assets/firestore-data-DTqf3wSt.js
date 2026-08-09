@@ -1,0 +1,1 @@
+function e(t){if(Array.isArray(t))return t.map(t=>e(t));if(t&&typeof t==`object`&&!(t instanceof Date)){let n={};for(let[r,i]of Object.entries(t))i!==void 0&&(n[r]=e(i));return n}return t}export{e as t};
