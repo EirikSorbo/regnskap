@@ -30,14 +30,20 @@ export async function deleteIncome(id: string): Promise<void> {
   await deleteDoc(doc(db, 'income', id))
 }
 
-/** Sletter en utgiftsoppføring og vedleggene dens. Filer som allerede er borte
- *  ignoreres, slik at en halvveis slettet oppføring alltid kan ryddes bort. */
+/** Sletter filer fra Storage. Filer som allerede er borte ignoreres, så en
+ *  halvveis opprydding alltid kan fullføres. */
+export async function deleteStoragePaths(paths: string[]): Promise<void> {
+  for (const path of paths) {
+    if (!path) continue
+    try { await deleteObject(ref(storage, path)) } catch { /* finnes ikke — ignorer */ }
+  }
+}
+
+/** Sletter en utgiftsoppføring og vedleggene dens. */
 export async function deleteEntry(entry: Entry): Promise<void> {
   if (!entry.id) return
   if (entry.entryType === 'receipt') {
-    for (const path of getImagePaths(entry as ReceiptEntry)) {
-      try { await deleteObject(ref(storage, path)) } catch { /* finnes ikke — ignorer */ }
-    }
+    await deleteStoragePaths(getImagePaths(entry as ReceiptEntry))
   }
   await deleteDoc(doc(db, 'receipts', entry.id))
 }

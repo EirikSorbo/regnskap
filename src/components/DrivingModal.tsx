@@ -1,7 +1,5 @@
-import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
 import { type Entry, type DrivingEntry } from '../types'
-import { kr } from '../lib/format'
+import { kr, fmtDate } from '../lib/format'
 import { ModalShell } from './Modal'
 import { IconPencil, IconPlus, IconTrash } from './icons'
 
@@ -42,7 +40,7 @@ export function DrivingModal({ year, entries, getAmount, onAdd, onEdit, onDelete
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-800 truncate">{d.from} → {d.to}{d.tripType === 'return' ? ' (t/r)' : ''}</p>
                       <p className="text-xs text-slate-400">
-                        {format(new Date(d.date), 'd. MMM yyyy', { locale: nb })} · {d.tripType === 'return' ? d.distance * 2 : d.distance} km
+                        {fmtDate(d.date)} · {d.tripType === 'return' ? d.distance * 2 : d.distance} km
                         {d.passengers > 0 ? ` · ${d.passengers} pass.` : ''}
                       </p>
                       {d.description && <p className="text-xs text-slate-400 mt-0.5">{d.description}</p>}

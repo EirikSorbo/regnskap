@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
 import { signOut } from 'firebase/auth'
 import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
 import { auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { type IncomeEntry, CATEGORIES } from '../types'
 import { addIncome, deleteIncome } from '../lib/entries'
-import { kr } from '../lib/format'
+import { kr, fmtDate } from '../lib/format'
 import { Drawer, Section } from './Modal'
 import { CategoryEditor } from './CategoryEditor'
 import { AssetEditor } from './AssetEditor'
@@ -140,7 +139,7 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
                 <div key={inc.id} className="flex items-center justify-between text-xs py-1">
                   <div className="text-slate-600 flex-1 min-w-0">
                     <span className="font-medium">{kr(inc.amount)}</span>
-                    <span className="text-slate-300 ml-1">{format(new Date(inc.date), 'd. MMM', { locale: nb })}</span>
+                    <span className="text-slate-300 ml-1">{fmtDate(inc.date, 'd. MMM')}</span>
                   </div>
                   <button onClick={() => handleDeleteIncome(inc)} className="text-slate-300 hover:text-red-400 ml-2 shrink-0"><IconTrash /></button>
                 </div>

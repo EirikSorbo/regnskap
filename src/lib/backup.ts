@@ -193,6 +193,8 @@ export interface ImportOptions {
   mode: 'merge' | 'restore'
   onStatus: (msg: string) => void
   applySettings: (partial: Partial<UserSettings>) => Promise<void>
+  /** Nummeret som gjelder nå, så en gjenoppretting ikke kan sette det ned. */
+  currentNextInvoiceNumber: number
 }
 
 /** Skriver en innlest backup til Firestore.
@@ -203,7 +205,7 @@ export interface ImportOptions {
  *  Å slette dem her ga permanent bildetap. Filer fra en helt annen backup blir
  *  liggende som ufarlige foreldreløse objekter i stedet. */
 export async function runImport(opts: ImportOptions): Promise<string> {
-  const { uid, parsed, mode, onStatus, applySettings } = opts
+  const { uid, parsed, mode, onStatus, applySettings, currentNextInvoiceNumber } = opts
   const { data, attachmentFiles } = parsed
 
   const COLLECTIONS = ['receipts', 'income', 'invoices', 'customers'] as const
@@ -268,6 +270,19 @@ export async function runImport(opts: ImportOptions): Promise<string> {
       ? convertLegacySettings(data.settings as Record<string, string>)
       : (data.settings as Partial<UserSettings>))
   }
+
+  // Nummerserien skal ALDRI gå bakover. En gammel backup bærer med seg sitt
+  // eget «neste fakturanummer», og uten denne vakten kunne en gjenoppretting
+  // sette telleren under fakturaer som allerede finnes, og neste faktura ville
+  // fått et nummer som var brukt før.
+  const highestNumber = [...(data.invoices ?? [])]
+    .map((i) => Number(i.number))
+    .filter((n) => Number.isFinite(n))
+    .reduce((max, n) => Math.max(max, n), 0)
+  const restored = Number((data.settings as { nextInvoiceNumber?: unknown } | undefined)?.nextInvoiceNumber)
+  const base = Number.isFinite(restored) && restored >= 1 ? restored : currentNextInvoiceNumber
+  const safeNext = Math.max(base, highestNumber + 1, currentNextInvoiceNumber)
+  if (safeNext !== base) await applySettings({ nextInvoiceNumber: safeNext })
 
   const parts = [`${count} importert`]
   if (skipped > 0) parts.push(`${skipped} duplikater hoppet over`)

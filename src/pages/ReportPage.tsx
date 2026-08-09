@@ -9,10 +9,9 @@ import {
   CATEGORIES, SETTINGS_MANAGED_POSTS, entryAmount, calcEkom, postSums, getImagePaths,
 } from '../types'
 import { type Invoice, statusLabel, numberGaps } from '../lib/invoice'
-import { kr2 as fmt, krInt as fmtInt, MONTHS, QUARTERS } from '../lib/format'
+import { kr2 as fmt, krInt as fmtInt, fmtDate, MONTHS, QUARTERS } from '../lib/format'
 import { IconArrowLeft, IconPrint } from '../components/icons'
 import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
 
 const YEAR_KEY = 'selected_year'
 
@@ -213,7 +212,7 @@ export default function ReportPage() {
             </div>
 
             <div className="mt-12 text-xs text-slate-300">
-              Generert {format(new Date(), 'd. MMMM yyyy', { locale: nb })} · Sørbø Musikk Regnskapsapp
+              Generert {fmtDate(new Date().toISOString(), 'd. MMMM yyyy')} · Sørbø Musikk Regnskapsapp
             </div>
           </div>
         </div>
@@ -328,7 +327,7 @@ export default function ReportPage() {
                         return (
                           <tr key={entry.id} className="border-b border-slate-100">
                             <td className="py-2 text-slate-400 tabular-nums">{i + 1}</td>
-                            <td className="py-2 text-slate-600 tabular-nums">{format(new Date(entry.date), 'dd.MM.yyyy')}</td>
+                            <td className="py-2 text-slate-600 tabular-nums">{fmtDate(entry.date, 'dd.MM.yyyy')}</td>
                             <td className="py-2 text-slate-700">{d.from} → {d.to}{d.tripType === 'return' ? ' (t/r)' : ''}</td>
                             <td className="py-2 text-slate-500">{entry.description || '—'}</td>
                             <td className="py-2 text-right tabular-nums text-slate-600">{fmtInt(totalKm)}</td>
@@ -370,7 +369,7 @@ export default function ReportPage() {
                         return (
                           <tr key={entry.id} className="border-b border-slate-100">
                             <td className="py-2 text-slate-400 tabular-nums">{i + 1}</td>
-                            <td className="py-2 text-slate-600 tabular-nums whitespace-nowrap">{format(new Date(entry.date), 'dd.MM.yyyy')}</td>
+                            <td className="py-2 text-slate-600 tabular-nums whitespace-nowrap">{fmtDate(entry.date, 'dd.MM.yyyy')}</td>
                             <td className="py-2 text-slate-700">{entry.description || '—'}</td>
                             <td className="py-2 text-slate-400 text-xs">
                               {refs.length > 0
@@ -428,7 +427,7 @@ export default function ReportPage() {
                         <tr key={`${entry.id}-${i}`} className="border-b border-slate-100">
                           <td className="py-1.5 font-mono text-xs text-slate-600">{a.ref}</td>
                           <td className="py-1.5 text-slate-500">{g.cat.post}</td>
-                          <td className="py-1.5 text-slate-500 tabular-nums">{format(new Date(entry.date), 'dd.MM.yyyy')}</td>
+                          <td className="py-1.5 text-slate-500 tabular-nums">{fmtDate(entry.date, 'dd.MM.yyyy')}</td>
                           <td className="py-1.5 text-slate-500">{entry.description || g.cat.label}</td>
                         </tr>
                       ))
@@ -465,7 +464,7 @@ export default function ReportPage() {
                   {yearInvoices.map(inv => (
                     <tr key={inv.id} className="border-b border-slate-100">
                       <td className="py-2 font-mono text-slate-500 tabular-nums">{inv.number ?? '—'}</td>
-                      <td className="py-2 text-slate-600 tabular-nums whitespace-nowrap">{format(new Date(inv.issueDate), 'dd.MM.yyyy')}</td>
+                      <td className="py-2 text-slate-600 tabular-nums whitespace-nowrap">{fmtDate(inv.issueDate, 'dd.MM.yyyy')}</td>
                       <td className="py-2 text-slate-700">{inv.customer?.name}</td>
                       <td className="py-2 text-slate-500">{statusLabel(inv, todayIso)}</td>
                       <td className="py-2 text-right tabular-nums font-medium text-slate-800">

@@ -1,19 +1,55 @@
-import { useState } from 'react'
-import { signInWithPopup } from 'firebase/auth'
+import { useEffect, useState } from 'react'
+import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth'
 import { auth, googleProvider } from '../firebase'
-import { useNavigate } from 'react-router-dom'
+
+/** Feilkoder der popup-innlogging ikke er farbar, og vi må sende brukeren
+ *  gjennom en omdirigering i stedet. Det gjelder særlig appen kjørt fra
+ *  hjemskjermen på iPhone, der popup-vinduer blokkeres. */
+const POPUP_UNAVAILABLE = new Set([
+  'auth/popup-blocked',
+  'auth/popup-closed-by-user',
+  'auth/cancelled-popup-request',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/web-storage-unsupported',
+])
+
+function code(err: unknown): string {
+  return typeof err === 'object' && err && 'code' in err ? String((err as { code: unknown }).code) : ''
+}
 
 export default function LoginPage() {
   const [error, setError] = useState('')
-  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+
+  // Kommer du tilbake fra en omdirigert innlogging, tar onAuthStateChanged seg
+  // av selve innloggingen. Dette kallet er her for å få tak i en eventuell
+  // FEIL, som ellers ville forsvunnet i stillhet.
+  useEffect(() => {
+    getRedirectResult(auth).catch(err => {
+      const c = code(err)
+      if (c) setError(`Innlogging feilet (${c}).`)
+    })
+  }, [])
 
   async function handleGoogle() {
     setError('')
+    setBusy(true)
     try {
       await signInWithPopup(auth, googleProvider)
-      navigate('/')
-    } catch (err: unknown) {
-      if (err instanceof Error) setError(err.message)
+      // Ingen navigate her: PublicRoute sender deg videre når brukeren er satt.
+    } catch (err) {
+      if (POPUP_UNAVAILABLE.has(code(err))) {
+        try {
+          await signInWithRedirect(auth, googleProvider)
+          return  // siden forlates
+        } catch (redirectErr) {
+          setError(redirectErr instanceof Error ? redirectErr.message : String(redirectErr))
+        }
+      } else {
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -21,7 +57,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
         <div className="text-center mb-8">
-          <img src="/regnskap/logo.png" alt="Sørbø Musikk" className="w-24 h-24 mx-auto mb-3 object-contain" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Sørbø Musikk" className="w-24 h-24 mx-auto mb-3 object-contain" />
           <h1 className="text-2xl font-bold text-slate-800">Sørbø Musikk</h1>
         </div>
 
@@ -31,7 +67,8 @@ export default function LoginPage() {
 
         <button
           onClick={handleGoogle}
-          className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 rounded-xl py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 shadow-sm transition"
+          disabled={busy}
+          className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 rounded-xl py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 shadow-sm transition"
         >
           <svg width="20" height="20" viewBox="0 0 48 48">
             <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.6 6.5 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/>
@@ -39,7 +76,7 @@ export default function LoginPage() {
             <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.5 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8H6.2C9.5 35.6 16.3 44 24 44z"/>
             <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.2 5.2C37 39.4 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/>
           </svg>
-          Logg inn med Google
+          {busy ? 'Logger inn …' : 'Logg inn med Google'}
         </button>
       </div>
     </div>

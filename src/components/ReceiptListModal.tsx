@@ -1,6 +1,5 @@
-import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
 import { type Entry, type ReceiptEntry, getImageUrls, getImagePaths } from '../types'
+import { fmtDate } from '../lib/format'
 import { ModalShell } from './Modal'
 
 /** Alle opplastede vedlegg som en flat liste med lenker, nyeste først. */
@@ -30,7 +29,7 @@ export function ReceiptListModal({ entries, onClose }: { entries: Entry[]; onClo
                   <span className="text-xs font-mono text-slate-400 mt-0.5 shrink-0">{isPdf ? 'PDF' : 'IMG'}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-blue-600 truncate">{filename}</p>
-                    <p className="text-xs text-slate-400">{f.entry.category.label} · {format(new Date(f.entry.date), 'd. MMM yyyy', { locale: nb })}</p>
+                    <p className="text-xs text-slate-400">{f.entry.category.label} · {fmtDate(f.entry.date)}</p>
                   </div>
                 </a>
               )

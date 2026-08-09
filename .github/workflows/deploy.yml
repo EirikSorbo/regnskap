@@ -20,6 +20,12 @@ jobs:
 
       - run: npm ci
 
+      # Testene og lint kjører FØR bygget. Uten dette kunne en rød test
+      # deployes rett til produksjon uten at noen merket det.
+      - run: npm run lint
+
+      - run: npm test
+
       - run: npm run build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}

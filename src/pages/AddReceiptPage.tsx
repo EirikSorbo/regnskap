@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { collection, addDoc, doc, getDoc, getDocs, query, where, updateDoc } from 'firebase/firestore'
+import { collection, addDoc, doc, getDoc, getDocs, query, where, updateDoc, deleteField } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
@@ -7,6 +7,7 @@ import { useSettings } from '../context/SettingsContext'
 import { CATEGORIES, DRIVING_CATEGORY, SETTINGS_MANAGED_POSTS, parseReceiptText, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
+import { deleteStoragePaths } from '../lib/entries'
 import { IconArrowLeft, IconCamera, IconCheck, IconPaperclip } from '../components/icons'
 
 export default function AddReceiptPage() {
@@ -29,6 +30,10 @@ export default function AddReceiptPage() {
   const [amount, setAmount] = useState('')
   const [existingImageUrls, setExistingImageUrls] = useState<string[]>([])
   const [existingImagePaths, setExistingImagePaths] = useState<string[]>([])
+  // Stiene oppføringen hadde da den ble åpnet. Trengs for å kunne slette fra
+  // Storage det du fjerner: uten dette forsvant stien fra dokumentet, mens
+  // filen ble liggende igjen og fortsatt var nåbar via nedlastingslenken sin.
+  const [originalImagePaths, setOriginalImagePaths] = useState<string[]>([])
 
   // Driving fields
   const [from, setFrom] = useState('Hjemme')
@@ -101,6 +106,7 @@ export default function AddReceiptPage() {
         setAmount(String(r.amount))
         setExistingImageUrls(getImageUrls(r))
         setExistingImagePaths(getImagePaths(r))
+        setOriginalImagePaths(getImagePaths(r))
       }
       setLoadingEntry(false)
     }).catch(err => {
@@ -133,7 +139,17 @@ export default function AddReceiptPage() {
           // Ikke rør ratePerKm/ratePerPassengerKm ved redigering — den fryste
           // satsen fra da turen ble registrert skal bli stående (updateDoc lar
           // felter som ikke sendes med være urørt).
-          await updateDoc(doc(db, 'receipts', editId!), data)
+          //
+          // Kvitteringsfeltene fjernes derimot eksplisitt. Bytter du en
+          // kvittering til kjøring, ble beløp og vedlegg ellers liggende igjen
+          // på dokumentet: usynlige i appen, men de falt samtidig ut av
+          // backup-ZIP-en, som bare ser på kvitteringer.
+          await updateDoc(doc(db, 'receipts', editId!), {
+            ...data,
+            amount: deleteField(), imageUrl: deleteField(), imagePath: deleteField(),
+            imageUrls: deleteField(), imagePaths: deleteField(),
+          })
+          await deleteStoragePaths(originalImagePaths)
         } else {
           await addDoc(collection(db, 'receipts'), {
             userId: user.uid, ...data, createdAt: Date.now(),
@@ -188,7 +204,15 @@ export default function AddReceiptPage() {
           imagePaths,
         }
         if (isEditing) {
-          await updateDoc(doc(db, 'receipts', editId!), data)
+          await updateDoc(doc(db, 'receipts', editId!), {
+            ...data,
+            // Motsatt vei: kjørefeltene skal ikke bli stående på en kvittering.
+            from: deleteField(), to: deleteField(), tripType: deleteField(),
+            distance: deleteField(), passengers: deleteField(),
+            ratePerKm: deleteField(), ratePerPassengerKm: deleteField(),
+          })
+          // Vedlegg du fjernet i skjemaet slettes nå også fra Storage.
+          await deleteStoragePaths(originalImagePaths.filter(p => !imagePaths.includes(p)))
         } else {
           await addDoc(collection(db, 'receipts'), { userId: user.uid, ...data, createdAt: Date.now() })
         }

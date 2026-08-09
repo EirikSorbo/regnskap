@@ -9,7 +9,12 @@ const inp = 'w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus
 export function CompanySection() {
   const { settings, updateSettings } = useSettings()
   const [draft, setDraft] = useState<CompanyInfo>(settings.company ?? {})
+  // Fakturanummeret skrives KUN hvis du faktisk har rørt feltet. Verdien
+  // fanges når skuffen åpnes, og uten denne vakten ville det å lagre en endret
+  // adresse skrive tilbake et foreldet nummer: åpne innstillinger, utsted en
+  // faktura, lagre adressen, og telleren sto plutselig ett hakk tilbake.
   const [nextNumber, setNextNumber] = useState(String(settings.nextInvoiceNumber ?? 1))
+  const [numberTouched, setNumberTouched] = useState(false)
   const [terms, setTerms] = useState(String(settings.paymentTermsDays ?? DEFAULT_PAYMENT_TERMS_DAYS))
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -17,7 +22,7 @@ export function CompanySection() {
   const set = (patch: Partial<CompanyInfo>) => setDraft(d => ({ ...d, ...patch }))
   const storedNumber = settings.nextInvoiceNumber ?? 1
   const parsedNumber = parseInt(nextNumber, 10)
-  const lowering = Number.isFinite(parsedNumber) && parsedNumber < storedNumber
+  const lowering = numberTouched && Number.isFinite(parsedNumber) && parsedNumber < storedNumber
 
   async function save() {
     if (lowering && !confirm(
@@ -27,8 +32,10 @@ export function CompanySection() {
     try {
       await updateSettings({
         company: draft,
-        nextInvoiceNumber: Number.isFinite(parsedNumber) && parsedNumber >= 1 ? parsedNumber : 1,
         paymentTermsDays: Math.max(0, parseInt(terms, 10) || DEFAULT_PAYMENT_TERMS_DAYS),
+        ...(numberTouched && Number.isFinite(parsedNumber) && parsedNumber >= 1
+          ? { nextInvoiceNumber: parsedNumber }
+          : {}),
       })
       setMsg('Lagret ✓'); setTimeout(() => setMsg(''), 2000)
     } catch (e) {
@@ -53,7 +60,8 @@ export function CompanySection() {
       <div className="border-t border-slate-100 pt-2 space-y-2">
         <div>
           <label className="block text-xs text-slate-500 mb-1">Neste fakturanummer</label>
-          <input value={nextNumber} onChange={e => setNextNumber(e.target.value)} inputMode="numeric" className={inp} />
+          <input value={nextNumber} onChange={e => { setNextNumber(e.target.value); setNumberTouched(true) }}
+            inputMode="numeric" className={inp} />
           <p className="text-xs text-slate-400 mt-1">
             Kommer du fra et annet system, sett dette over det høyeste nummeret du brukte der. Nummeret tildeles først når en faktura utstedes.
           </p>

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
@@ -10,7 +9,7 @@ import {
   type Invoice, lineTotal, addressLines, statusLabel, canEdit, canDelete, canCredit, invoiceFileName,
 } from '../lib/invoice'
 import { issueInvoice, markPaid, markUnpaid, deleteDraft, createCreditNote } from '../lib/invoice-store'
-import { kr } from '../lib/format'
+import { kr, fmtDate } from '../lib/format'
 import { IconArrowLeft, IconPrint } from '../components/icons'
 import { Logo } from '../components/Logo'
 
@@ -168,7 +167,7 @@ export default function InvoiceViewPage() {
             {invoice.customer.orgNumber && <p className="text-sm text-slate-500 mt-1">Org.nr. {invoice.customer.orgNumber}</p>}
           </div>
           <div className="text-sm">
-            <Row label={isCredit ? 'Kreditnotadato' : 'Fakturadato'} value={fmtDate(invoice.issueDate)} />
+            <Row label={isCredit ? 'Kreditnotadato' : 'Fakturadato'} value={fmtDate(invoice.issueDate, 'd. MMMM yyyy')} />
             {invoice.deliveryDate && <Row label="Leveringsdato" value={fmtDate(invoice.deliveryDate)} />}
             {invoice.deliveryPlace && <Row label="Leveringssted" value={invoice.deliveryPlace} />}
             {!isCredit && <Row label="Forfallsdato" value={fmtDate(invoice.dueDate)} />}
@@ -244,8 +243,3 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
-function fmtDate(iso?: string): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? iso : format(d, 'd. MMMM yyyy', { locale: nb })
-}

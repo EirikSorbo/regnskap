@@ -1,7 +1,5 @@
-import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
 import { type Entry, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
-import { kr } from '../lib/format'
+import { kr, fmtDate } from '../lib/format'
 import { IconPencil, IconTrash } from './icons'
 
 /** Lista over årets oppføringer på forsiden. Én rad utvides om gangen. */
@@ -36,7 +34,7 @@ export function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit
                   {isDriving ? `${d!.from} → ${d!.to}${d!.tripType === 'return' ? ' (t/r)' : ''}` : (e.description || e.category.label)}
                 </p>
                 <p className="text-xs text-slate-400">
-                  Post {e.category.post} · {format(new Date(e.date), 'd. MMM yyyy', { locale: nb })}
+                  Post {e.category.post} · {fmtDate(e.date)}
                   {isDriving && ` · ${d!.tripType === 'return' ? d!.distance * 2 : d!.distance} km`}
                 </p>
               </div>

@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
 import { useInvoices } from '../hooks/useInvoices'
 import { type Invoice, statusLabel, isOverdue, outstandingTotal } from '../lib/invoice'
-import { kr } from '../lib/format'
+import { kr, fmtDate } from '../lib/format'
 import { CustomerRegisterModal } from '../components/CustomerRegisterModal'
 import { InvoiceImportModal } from '../components/InvoiceImportModal'
 import { IconArrowLeft, IconPlus } from '../components/icons'
@@ -144,8 +143,8 @@ function InvoiceRow({ inv, today, onClick }: { inv: Invoice; today: string; onCl
             {inv.number ? `${inv.kind === 'kreditnota' ? 'Kreditnota' : 'Faktura'} ${inv.number}` : 'Kladd'} · {inv.customer.name}
           </p>
           <p className="text-xs text-slate-400">
-            {format(new Date(inv.issueDate), 'd. MMM yyyy', { locale: nb })}
-            {inv.status === 'utstedt' && ` · forfaller ${format(new Date(inv.dueDate), 'd. MMM', { locale: nb })}`}
+            {fmtDate(inv.issueDate)}
+            {inv.status === 'utstedt' && ` · forfaller ${fmtDate(inv.dueDate, 'd. MMM')}`}
           </p>
         </div>
         <div className="text-right shrink-0">

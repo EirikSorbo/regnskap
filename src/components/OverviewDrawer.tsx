@@ -19,7 +19,7 @@ export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, on
   onClose: () => void
 }) {
   const { user } = useAuth()
-  const { updateSettings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [status, setStatus] = useState('')
   const [pending, setPending] = useState<ParsedBackup | null>(null)
 
@@ -47,6 +47,7 @@ export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, on
         uid: user.uid, parsed, mode,
         onStatus: setStatus,
         applySettings: updateSettings,
+        currentNextInvoiceNumber: settings.nextInvoiceNumber ?? 1,
       }))
     } catch (err) {
       setStatus('Feil: ' + (err instanceof Error ? err.message : String(err)))
