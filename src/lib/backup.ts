@@ -1,0 +1,257 @@
+// ---------------------------------------------------------------------------
+//  BACKUP OG IMPORT — FIRESTORE/STORAGE-SIDEN
+// ---------------------------------------------------------------------------
+//  Selve inn- og utlesingen. Formatet (hva som er med, hva filene heter) ligger
+//  i backup-format.ts og er enhetstestet; her er bare kallene mot Firebase og
+//  nettleseren. Lå tidligere som ~300 linjer inne i DashboardPage.
+// ---------------------------------------------------------------------------
+
+import { collection, query, where, getDocs, doc, setDoc, addDoc, deleteDoc } from 'firebase/firestore'
+import { ref, getBlob, uploadBytes } from 'firebase/storage'
+import { format } from 'date-fns'
+import { db, storage } from '../firebase'
+import { convertLegacySettings, type UserSettings } from '../context/SettingsContext'
+import { type Entry, type Category, entriesToCsv } from '../types'
+import {
+  buildAttachmentMap, buildBackupData, backupFileName, importableEntries, findAttachmentPath,
+  type Attachment, type BackupData, type BackupEntry,
+} from './backup-format'
+
+export type { BackupData, BackupEntry } from './backup-format'
+
+/** Hvor lenge vi venter på ett vedlegg før vi gir opp og går videre. Uten dette
+ *  kunne én treg fil henge hele nedlastingen. */
+const BLOB_TIMEOUT_MS = 15000
+
+function today() {
+  return format(new Date(), 'yyyy-MM-dd')
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+async function fetchBlob(path: string): Promise<Blob> {
+  return Promise.race([
+    getBlob(ref(storage, path)),
+    new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), BLOB_TIMEOUT_MS)),
+  ])
+}
+
+/** Henter alle kvitteringer og inntekter for brukeren. Backupen leser alltid
+ *  ferskt fra Firestore i stedet for fra det siden har i minnet, så en delvis
+ *  lastet skjerm ikke kan gi en delvis backup. */
+async function fetchUserData(uid: string) {
+  const [receiptSnap, incomeSnap] = await Promise.all([
+    getDocs(query(collection(db, 'receipts'), where('userId', '==', uid))),
+    getDocs(query(collection(db, 'income'), where('userId', '==', uid))),
+  ])
+  return {
+    receipts: receiptSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as (Entry & BackupEntry)[],
+    income: incomeSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as BackupEntry[],
+  }
+}
+
+/** Legger vedleggene inn i en ZIP og rapporterer hva som ikke gikk. Et vedlegg
+ *  som feiler stopper aldri de andre. */
+async function addAttachments(
+  zip: { file: (name: string, data: Blob) => void },
+  attachments: Attachment[],
+  prefix = '',
+): Promise<{ added: number; errors: string[] }> {
+  let added = 0
+  const errors: string[] = []
+  for (const att of attachments) {
+    try {
+      zip.file(prefix + att.stdName, await fetchBlob(att.path))
+      added++
+    } catch (err) {
+      console.warn('Vedlegg feilet:', att.stdName, err)
+      errors.push(att.stdName)
+    }
+  }
+  return { added, errors }
+}
+
+/** Bare dataene, som JSON. */
+export async function downloadJsonBackup(uid: string, settings: UserSettings, yearFilter?: number) {
+  const { receipts, income } = await fetchUserData(uid)
+  const data = buildBackupData({ receipts, income, settings: { ...settings }, yearFilter })
+  downloadBlob(
+    new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+    backupFileName('data', yearFilter, today()),
+  )
+}
+
+/** Bare vedleggene, som ZIP. */
+export async function downloadAttachmentZip(
+  uid: string,
+  categories: Category[],
+  yearFilter?: number,
+): Promise<{ added: number; errors: string[] } | null> {
+  const { receipts } = await fetchUserData(uid)
+  const entries = receipts.filter((e) => !yearFilter || e.date?.startsWith(String(yearFilter)))
+  const attachments = buildAttachmentMap(entries, categories)
+  if (attachments.length === 0) return null
+  // Lastes dynamisk: jszip trengs bare til backup/import, ikke ved oppstart.
+  const { default: JSZip } = await import('jszip')
+  const zip = new JSZip()
+  const result = await addAttachments(zip, attachments)
+  if (result.added === 0) return result
+  downloadBlob(await zip.generateAsync({ type: 'blob' }), backupFileName('vedlegg', yearFilter, today()))
+  return result
+}
+
+/** Data + vedlegg i én ZIP. Dette er den som teller som «backup tatt». */
+export async function downloadFullBackup(
+  uid: string,
+  settings: UserSettings,
+  categories: Category[],
+  yearFilter?: number,
+): Promise<{ added: number; errors: string[] }> {
+  const { receipts, income } = await fetchUserData(uid)
+  const data = buildBackupData({ receipts, income, settings: { ...settings }, yearFilter })
+  const { default: JSZip } = await import('jszip')
+  const zip = new JSZip()
+  zip.file(backupFileName('data', yearFilter, today()), JSON.stringify(data, null, 2))
+  const entries = receipts.filter((e) => !yearFilter || e.date?.startsWith(String(yearFilter)))
+  const result = await addAttachments(zip, buildAttachmentMap(entries, categories), 'vedlegg/')
+  downloadBlob(await zip.generateAsync({ type: 'blob' }), backupFileName('full', yearFilter, today()))
+  return result
+}
+
+/** Utgiftene som regneark. Bruker oppføringene siden alt har i minnet — dette er
+ *  en rapport til regnskapsfører, ikke en sikkerhetskopi. */
+export function downloadCsv(entries: Entry[], amountOf: (e: Entry) => number, yearFilter?: number) {
+  // BOM så Excel leser æøå riktig.
+  const blob = new Blob(['﻿' + entriesToCsv(entries, amountOf)], { type: 'text/csv;charset=utf-8' })
+  downloadBlob(blob, backupFileName('csv', yearFilter, today()))
+}
+
+export interface ParsedBackup {
+  data: BackupData
+  attachmentFiles: { name: string; blob: Blob }[]
+}
+
+/** Leser en backup-fil (JSON eller ZIP) uten å skrive noe. Kaster ved ugyldig
+ *  fil, så kalleren kan vise feilen før brukeren velger importmetode. */
+export async function readBackupFile(file: File): Promise<ParsedBackup> {
+  const attachmentFiles: { name: string; blob: Blob }[] = []
+  let data: BackupData
+
+  if (file.name.endsWith('.zip')) {
+    const { default: JSZip } = await import('jszip')
+    const zip = await JSZip.loadAsync(file)
+    const jsonFile = Object.keys(zip.files).find((f) => f.endsWith('.json'))
+    if (!jsonFile) throw new Error('Fant ingen JSON-fil i ZIP-filen.')
+    data = JSON.parse(await zip.files[jsonFile].async('string'))
+    for (const [path, zipEntry] of Object.entries(zip.files)) {
+      if (zipEntry.dir || !path.startsWith('vedlegg/')) continue
+      attachmentFiles.push({ name: path.replace('vedlegg/', ''), blob: await zipEntry.async('blob') })
+    }
+  } else {
+    data = JSON.parse(await file.text())
+  }
+
+  if (!data.receipts || !data.income) throw new Error('Ugyldig backup-fil.')
+  return { data, attachmentFiles }
+}
+
+export interface ImportOptions {
+  uid: string
+  parsed: ParsedBackup
+  mode: 'merge' | 'restore'
+  onStatus: (msg: string) => void
+  applySettings: (partial: Partial<UserSettings>) => Promise<void>
+}
+
+/** Skriver en innlest backup til Firestore.
+ *
+ *  «restore» sletter eksisterende dokumenter først, men rører ALDRI filene i
+ *  Storage: de importerte kvitteringene beholder sine opprinnelige stier, så
+ *  bildene overlever en gjenoppretting fra en backup som bare inneholdt JSON.
+ *  Å slette dem her ga permanent bildetap. Filer fra en helt annen backup blir
+ *  liggende som ufarlige foreldreløse objekter i stedet. */
+export async function runImport(opts: ImportOptions): Promise<string> {
+  const { uid, parsed, mode, onStatus, applySettings } = opts
+  const { data, attachmentFiles } = parsed
+
+  const [existingReceipts, existingIncome] = await Promise.all([
+    getDocs(query(collection(db, 'receipts'), where('userId', '==', uid))),
+    getDocs(query(collection(db, 'income'), where('userId', '==', uid))),
+  ])
+
+  if (mode === 'restore') {
+    onStatus('Sletter eksisterende data...')
+    for (const d of existingReceipts.docs) await deleteDoc(doc(db, 'receipts', d.id))
+    for (const d of existingIncome.docs) await deleteDoc(doc(db, 'income', d.id))
+  }
+
+  const existingIds = {
+    receipts: mode === 'merge' ? new Set(existingReceipts.docs.map((d) => d.id)) : new Set<string>(),
+    income: mode === 'merge' ? new Set(existingIncome.docs.map((d) => d.id)) : new Set<string>(),
+  }
+
+  onStatus('Importerer...')
+  let count = 0
+  let skipped = 0
+
+  // Bevar dokument-id-en fra backupen (setDoc), så en ny import av samme fil ikke
+  // lager duplikater — den id-baserte dedup-en treffer da faktisk. Oppføringer
+  // uten id (eldre backup-format) faller tilbake til addDoc.
+  async function writeAll(list: BackupEntry[], col: 'receipts' | 'income') {
+    for (const row of importableEntries(list, uid)) {
+      const { id, ...fields } = row
+      fields.userId = uid
+      if (id && existingIds[col].has(id)) { skipped++; continue }
+      if (id) await setDoc(doc(db, col, String(id)), fields)
+      else await addDoc(collection(db, col), fields)
+      count++
+    }
+  }
+  await writeAll(data.receipts ?? [], 'receipts')
+  await writeAll(data.income ?? [], 'income')
+
+  let filesUploaded = 0
+  if (attachmentFiles.length > 0) {
+    onStatus(`Laster opp ${attachmentFiles.length} vedlegg...`)
+    for (const af of attachmentFiles) {
+      const path = findAttachmentPath(data.receipts, af.name)
+      if (!path) continue
+      try {
+        await uploadBytes(ref(storage, path), af.blob)
+        filesUploaded++
+      } catch (err) {
+        console.warn('Vedlegg-feil:', af.name, err)
+      }
+    }
+  }
+
+  if (data.settings && typeof data.settings === 'object') {
+    // Import-grensen: her tar vi formen på tro. Gammel localStorage-backup har
+    // strengverdier under snake_case-nøkler, ny backup har UserSettings-formen.
+    const isLegacy = 'driving_rate_per_km' in data.settings
+    await applySettings(isLegacy
+      ? convertLegacySettings(data.settings as Record<string, string>)
+      : (data.settings as Partial<UserSettings>))
+  }
+
+  const parts = [`${count} importert`]
+  if (skipped > 0) parts.push(`${skipped} duplikater hoppet over`)
+  if (filesUploaded > 0) parts.push(`${filesUploaded} vedlegg lastet opp`)
+  if (mode === 'restore') parts.unshift('Gjenopprettet')
+  return `✓ ${parts.join(', ')}.`
+}
+
+/** Teksten som vises når en fil er lest, men før brukeren har valgt
+ *  importmetode. Teller med samme regel som importen faktisk bruker. */
+export function describeParsedBackup(parsed: ParsedBackup, uid: string): string {
+  const receipts = importableEntries(parsed.data.receipts, uid).length
+  const income = importableEntries(parsed.data.income, uid).length
+  const att = parsed.attachmentFiles.length
+  return `Fil lest: ${receipts} utgifter, ${income} inntekter${att > 0 ? `, ${att} vedlegg` : ''}. Velg importmetode:`
+}

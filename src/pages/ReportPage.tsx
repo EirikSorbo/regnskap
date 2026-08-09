@@ -5,36 +5,19 @@ import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  type Entry, type ReceiptEntry, type DrivingEntry,
-  CATEGORIES, SETTINGS_MANAGED_POSTS, drivingAmount, calcEkom, managedPostAmount, getImagePaths,
+  type Entry, type ReceiptEntry, type DrivingEntry, type IncomeEntry,
+  CATEGORIES, SETTINGS_MANAGED_POSTS, entryAmount, calcEkom, postSums, getImagePaths,
 } from '../types'
+import { kr2 as fmt, krInt as fmtInt, MONTHS, QUARTERS } from '../lib/format'
+import { IconArrowLeft, IconPrint } from '../components/icons'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 
 const YEAR_KEY = 'selected_year'
 
-const MONTHS = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
-const QUARTERS = ['Q1 (jan–mar)', 'Q2 (apr–jun)', 'Q3 (jul–sep)', 'Q4 (okt–des)']
-
-function fmt(n: number) {
-  return n.toLocaleString('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function fmtInt(n: number) {
-  return n.toLocaleString('nb-NO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
-
 /** Generate standardized attachment reference: Post XXXX – YYYY-MM-DD – NNN */
 function attachmentRef(post: string, date: string, index: number, ext: string) {
   return `${post}-${date}-${String(index).padStart(3, '0')}.${ext}`
-}
-
-interface IncomeEntry {
-  id?: string
-  userId: string
-  amount: number
-  date: string
-  createdAt: number
 }
 
 export default function ReportPage() {
@@ -92,26 +75,12 @@ export default function ReportPage() {
   const yearIncome = incomeEntries.filter(e => e.date.startsWith(String(year)))
   const totalIncome = yearIncome.reduce((s, e) => s + e.amount, 0)
 
-  function getAmount(entry: Entry): number {
-    if (entry.entryType === 'receipt') return (entry as ReceiptEntry).amount
-    return drivingAmount(entry as DrivingEntry, ratePerKm, ratePerPassengerKm)
-  }
+  const getAmount = (entry: Entry) => entryAmount(entry, ratePerKm, ratePerPassengerKm)
 
   // Grupper per post i kontoplan-rekkefølge. Settings-styrte poster (EKOM/
-  // hjemmekontor/avskrivninger) henter årsbeløpet fra innstillinger (identisk med
-  // det de gamle skygge-kvitteringene lagret); resten summeres fra kvitteringer.
-  const postGroups = (settings.categories ?? CATEGORIES)
-    .map(cat => {
-      const managed = managedPostAmount(cat.post, settings, year)
-      if (managed !== null) {
-        return { cat, entries: [] as Entry[], sum: managed, managed: true }
-      }
-      const catEntries = yearEntries
-        .filter(e => e.category.post === cat.post)
-        .sort((a, b) => a.date.localeCompare(b.date))
-      const sum = catEntries.reduce((s, e) => s + getAmount(e), 0)
-      return { cat, entries: catEntries, sum, managed: false }
-    })
+  // hjemmekontor/avskrivninger) henter årsbeløpet fra innstillinger; resten
+  // summeres fra kvitteringer. Delt med oversiktsmodalen på forsiden.
+  const postGroups = postSums(settings.categories ?? CATEGORIES, yearEntries, settings, year, getAmount)
     .filter(g => g.managed ? g.sum !== 0 : g.entries.length > 0)
 
   const totalExpenses = postGroups.reduce((s, g) => s + g.sum, 0)
@@ -141,13 +110,13 @@ export default function ReportPage() {
       <div className="print:hidden sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <button onClick={() => navigate('/')} className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            <IconArrowLeft className="w-4 h-4" />
             Tilbake
           </button>
           <div className="flex items-center gap-2">
             <button onClick={() => window.print()}
               className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+              <IconPrint />
               Eksporter til PDF
             </button>
           </div>

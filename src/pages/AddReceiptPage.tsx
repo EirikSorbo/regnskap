@@ -7,16 +7,7 @@ import { useSettings } from '../context/SettingsContext'
 import { CATEGORIES, DRIVING_CATEGORY, SETTINGS_MANAGED_POSTS, parseReceiptText, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
-
-function IconPaperclip() {
-  return <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-}
-function IconCheck() {
-  return <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-}
-function IconArrowLeft() {
-  return <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-}
+import { IconArrowLeft, IconCamera, IconCheck, IconPaperclip } from '../components/icons'
 
 export default function AddReceiptPage() {
   const { user } = useAuth()
@@ -304,7 +295,8 @@ export default function AddReceiptPage() {
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleScan(f); if (scanInputRef.current) scanInputRef.current.value = '' }} />
               <button type="button" onClick={() => scanInputRef.current?.click()} disabled={scanning}
                 className="w-full flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg py-2.5 text-sm font-medium hover:bg-blue-100 disabled:opacity-60 transition">
-                {scanning ? 'Skanner …' : '📷 Skann kvittering – fyll inn automatisk'}
+                <IconCamera />
+                {scanning ? 'Skanner …' : 'Skann kvittering – fyll inn automatisk'}
               </button>
               {scanMsg && <p className="text-xs text-slate-500 mt-1.5">{scanMsg}</p>}
             </div>

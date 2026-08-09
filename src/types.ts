@@ -52,6 +52,19 @@ export interface DrivingEntry extends BaseEntry {
 
 export type Entry = ReceiptEntry | DrivingEntry
 
+/** En inntektsføring (post 3000). Bodde tidligere som to ulike lokale
+ *  interfacer i DashboardPage og ReportPage — den ene lovet en `description`
+ *  appen aldri skrev. Ett sted nå, og feltet er valgfritt slik dataene faktisk
+ *  er. */
+export interface IncomeEntry {
+  id?: string
+  userId: string
+  amount: number
+  date: string
+  description?: string
+  createdAt: number
+}
+
 export const DRIVING_CATEGORY: Category = { post: '7080', label: 'Kjøring' }
 
 export const CATEGORIES: Category[] = [
@@ -103,6 +116,14 @@ export function drivingAmount(
     ? (d.ratePerPassengerKm as number)
     : fallbackPerPassengerKm
   return calcDrivingAmount(d.distance, d.tripType, d.passengers, perKm, perPassengerKm)
+}
+
+/** Beløpet for én utgiftsoppføring, uansett type. Dashbordet og rapporten hadde
+ *  hver sin identiske `getAmount` — dette er den ene. Ikke-tall behandles som 0
+ *  så en korrupt importert rad ikke gjør hele årssummen til NaN. */
+export function entryAmount(e: Entry, ratePerKm: number, ratePerPassengerKm: number): number {
+  if (e.entryType === 'driving') return drivingAmount(e, ratePerKm, ratePerPassengerKm)
+  return Number(e.amount) || 0
 }
 
 /** Fritekstfilter for oppføringslista: matcher beskrivelse, kategori (navn +
@@ -166,6 +187,58 @@ export function managedPostAmount(post: string, s: ManagedSettings, year: number
     return assets.length ? saldoDepreciation(assets, year) : (s.avskrivningerAmounts[ys] || 0)
   }
   return null
+}
+
+/** Én post i resultatoppstillingen: kategorien, oppføringene bak den (tom for
+ *  settings-styrte poster, som ikke har kvitteringer) og årssummen. */
+export interface PostGroup {
+  cat: Category
+  entries: Entry[]
+  sum: number
+  managed: boolean
+}
+
+/** Summerer årets utgifter per post, i kontoplanens rekkefølge. Delt av
+ *  rapporten og oversiktsmodalen, som tidligere hadde hver sin kopi av logikken.
+ *
+ *  Poster som IKKE står i kontoplanen lenger (brukeren har slettet kategorien,
+ *  eller dataene er importert fra en eldre kontoplan) legges til på slutten med
+ *  navnet oppføringen selv bærer. Uten dette forsvant slike oppføringer stille
+ *  fra rapporten samtidig som de talte med i totalen, så oppstillingen ikke
+ *  summerte seg til sin egen sluttsum. */
+export function postSums(
+  categories: Category[],
+  yearEntries: Entry[],
+  settings: ManagedSettings,
+  year: number,
+  amountOf: (e: Entry) => number,
+): PostGroup[] {
+  const forPost = (post: string) =>
+    yearEntries.filter((e) => e.category.post === post).sort((a, b) => a.date.localeCompare(b.date))
+
+  const groups: PostGroup[] = categories.map((cat) => {
+    const managed = managedPostAmount(cat.post, settings, year)
+    if (managed !== null) return { cat, entries: [], sum: managed, managed: true }
+    const entries = forPost(cat.post)
+    return { cat, entries, sum: entries.reduce((s, e) => s + amountOf(e), 0), managed: false }
+  })
+
+  const known = new Set(categories.map((c) => c.post))
+  const orphanPosts = [...new Set(
+    yearEntries
+      .map((e) => e.category.post)
+      .filter((p) => !known.has(p) && !SETTINGS_MANAGED_POSTS.includes(p)),
+  )].sort()
+  for (const post of orphanPosts) {
+    const entries = forPost(post)
+    groups.push({
+      cat: { post, label: entries[0]?.category.label || post },
+      entries,
+      sum: entries.reduce((s, e) => s + amountOf(e), 0),
+      managed: false,
+    })
+  }
+  return groups
 }
 
 /** Trekker ut beløp og dato fra OCR-råtekst av en kvittering. Ren og testbar;

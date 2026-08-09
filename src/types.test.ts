@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   calcDrivingAmount, drivingAmount, calcEkom, filterEntries, managedPostAmount,
-  parseReceiptText, saldoDepreciation, saldoBalance, entriesToCsv,
+  parseReceiptText, saldoDepreciation, saldoBalance, entriesToCsv, entryAmount, postSums,
   type DrivingEntry, type Entry, type Asset,
 } from './types.ts'
 
@@ -164,4 +164,46 @@ test('entriesToCsv: felt med semikolon/anførselstegn escapes', () => {
   const r2: Entry = { ...receipt, id: '9', description: 'Kabel; 2 m "pro"', amount: 200 }
   const line = entriesToCsv([r2], (e) => (e.entryType === 'receipt' ? e.amount : 0)).split('\r\n')[1]
   assert.ok(line.includes('"Kabel; 2 m ""pro"""'))
+})
+
+// --- entryAmount / postSums ---
+const noManaged = {
+  ekomPhone: {}, ekomInternet: {}, ekomPrivateAmt: 0,
+  hjemmekontorAmounts: {}, avskrivningerAmounts: {},
+}
+const amountOf = (e: Entry) => entryAmount(e, 3.5, 1)
+
+test('entryAmount: kvittering gir beløpet, kjøring gir beregnet fradrag', () => {
+  assert.equal(entryAmount(receipt, 3.5, 1), 1500)
+  assert.equal(entryAmount(drive, 3.5, 1), 700)  // 200 km * 3,5
+})
+
+test('entryAmount: ugyldig beløp teller som 0 (én korrupt rad ødelegger ikke årssummen)', () => {
+  const bad = { ...receipt, amount: undefined as unknown as number }
+  assert.equal(entryAmount(bad, 3.5, 1), 0)
+})
+
+test('postSums: summerer per post i kontoplanens rekkefølge', () => {
+  const cats = [{ post: '6500', label: 'Utstyr' }, { post: '7080', label: 'Kjøring' }]
+  const groups = postSums(cats, both, noManaged, 2025, amountOf)
+  assert.deepEqual(groups.map(g => [g.cat.post, g.sum]), [['6500', 1500], ['7080', 700]])
+})
+
+test('postSums: settings-styrt post henter beløpet fra innstillingene, uten oppføringer', () => {
+  const cats = [{ post: '7770', label: 'Hjemmekontor' }]
+  const s = { ...noManaged, hjemmekontorAmounts: { '2025': 2000 } }
+  const [g] = postSums(cats, [], s, 2025, amountOf)
+  assert.equal(g.sum, 2000)
+  assert.equal(g.managed, true)
+  assert.deepEqual(g.entries, [])
+})
+
+test('postSums: oppføring på en post som ikke finnes i kontoplanen tas med til slutt', () => {
+  // Regresjon: slike oppføringer forsvant fra oppstillingen samtidig som de
+  // talte med i totalen, så rapporten ikke summerte seg til sin egen sluttsum.
+  const cats = [{ post: '7080', label: 'Kjøring' }]
+  const groups = postSums(cats, both, noManaged, 2025, amountOf)
+  assert.deepEqual(groups.map(g => g.cat.post), ['7080', '6500'])
+  assert.equal(groups.reduce((s, g) => s + g.sum, 0), 2200)
+  assert.equal(groups[1].cat.label, 'Utstyr')  // navnet hentes fra oppføringen selv
 })
