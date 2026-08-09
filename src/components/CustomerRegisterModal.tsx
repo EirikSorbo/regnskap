@@ -11,7 +11,7 @@ import { IconPencil, IconPlus, IconTrash, IconUpload } from './icons'
 /** Kunderegisteret: liste, redigering og import fra CSV. */
 export function CustomerRegisterModal({ onClose }: { onClose: () => void }) {
   const { user } = useAuth()
-  const { customers, loading } = useCustomers(user)
+  const { customers, loading, error } = useCustomers(user)
   const [editing, setEditing] = useState<Customer | 'ny' | null>(null)
   const [importing, setImporting] = useState(false)
 
@@ -35,6 +35,8 @@ export function CustomerRegisterModal({ onClose }: { onClose: () => void }) {
             <IconUpload /> Importer CSV
           </button>
         </div>
+
+        {error && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
 
         {loading ? (
           <p className="text-sm text-slate-400 py-8 text-center">Laster...</p>

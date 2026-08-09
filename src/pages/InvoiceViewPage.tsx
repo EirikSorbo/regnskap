@@ -12,6 +12,7 @@ import {
 import { issueInvoice, markPaid, markUnpaid, deleteDraft, createCreditNote } from '../lib/invoice-store'
 import { kr } from '../lib/format'
 import { IconArrowLeft, IconPrint } from '../components/icons'
+import { Logo } from '../components/Logo'
 
 /** Selve fakturaen, i utskriftsvennlig form. «Last ned PDF» åpner utskrifts-
  *  dialogen, samme mønster som årsrapporten: velg «Lagre som PDF» der. */
@@ -130,7 +131,7 @@ export default function InvoiceViewPage() {
       </div>
 
       {/* Selve fakturaen */}
-      <div className="max-w-3xl mx-auto px-8 py-10 print:px-0 print:py-0 print:max-w-none">
+      <div className="invoice-sheet max-w-3xl mx-auto px-8 py-10 print:px-0 print:py-0 print:max-w-none">
         <div className="flex items-start justify-between border-t-4 border-slate-800 pt-6">
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-[0.2em]">{title}</p>
@@ -149,7 +150,7 @@ export default function InvoiceViewPage() {
           </div>
         </div>
 
-        <div className="mt-10 grid grid-cols-2 gap-8">
+        <div className="mt-16 grid grid-cols-2 gap-8">
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Faktureres til</p>
             <p className="text-sm font-semibold text-slate-800">{invoice.customer.name}</p>
@@ -164,41 +165,47 @@ export default function InvoiceViewPage() {
           </div>
         </div>
 
-        <table className="w-full text-sm mt-10">
+        <table className="w-full text-sm mt-16">
           <thead>
             <tr className="border-b-2 border-slate-200">
-              <th className="text-left py-2 font-semibold text-slate-600">Beskrivelse</th>
-              <th className="text-right py-2 font-semibold text-slate-600 w-20">Antall</th>
-              <th className="text-right py-2 font-semibold text-slate-600 w-28">Pris</th>
-              <th className="text-right py-2 font-semibold text-slate-600 w-32">Sum</th>
+              <th className="text-left py-3 font-semibold text-slate-600">Beskrivelse</th>
+              <th className="text-right py-3 font-semibold text-slate-600 w-20">Antall</th>
+              <th className="text-right py-3 font-semibold text-slate-600 w-28">Pris</th>
+              <th className="text-right py-3 font-semibold text-slate-600 w-32">Sum</th>
             </tr>
           </thead>
           <tbody>
             {invoice.lines.map((l, i) => (
               <tr key={i} className="border-b border-slate-100">
-                <td className="py-2 text-slate-700">{l.description}</td>
-                <td className="py-2 text-right tabular-nums text-slate-600">{l.quantity}</td>
-                <td className="py-2 text-right tabular-nums text-slate-600">{kr(l.unitPrice)}</td>
-                <td className="py-2 text-right tabular-nums font-medium text-slate-800">{kr(lineTotal(l))}</td>
+                <td className="py-3 text-slate-700">{l.description}</td>
+                <td className="py-3 text-right tabular-nums text-slate-600">{l.quantity}</td>
+                <td className="py-3 text-right tabular-nums text-slate-600">{kr(l.unitPrice)}</td>
+                <td className="py-3 text-right tabular-nums font-medium text-slate-800">{kr(lineTotal(l))}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={3} className="py-3 font-semibold text-slate-600">{isCredit ? 'Å godskrive' : 'Å betale'}</td>
-              <td className="py-3 text-right tabular-nums font-bold text-slate-800 text-lg">{kr(invoice.total)}</td>
+              <td colSpan={3} className="py-4 font-semibold text-slate-600">{isCredit ? 'Å godskrive' : 'Å betale'}</td>
+              <td className="py-4 text-right tabular-nums font-bold text-slate-800 text-lg">{kr(invoice.total)}</td>
             </tr>
           </tfoot>
         </table>
 
-        {invoice.note && <p className="text-sm text-slate-600 mt-6">{invoice.note}</p>}
+        {invoice.note && <p className="text-sm text-slate-600 mt-8">{invoice.note}</p>}
 
-        <div className="mt-10 pt-4 border-t border-slate-200 text-xs text-slate-500 space-y-1">
-          {!isCredit && company.bankAccount && (
-            <p>Betales til konto {company.bankAccount} innen {fmtDate(invoice.dueDate)}.</p>
-          )}
-          {isCredit && invoice.creditsInvoiceId && <p>Denne kreditnotaen gjelder en tidligere utstedt faktura.</p>}
-          <p>Merverdiavgift er ikke beregnet. Foretaket er ikke registrert i Merverdiavgiftsregisteret.</p>
+        {/* Bunnfeltet skyves ned til bunnen av arket ved utskrift, se
+            .invoice-footer i index.css. Logoen står diskret til venstre, i
+            samme dempede tone som resten av småteksten. */}
+        <div className="invoice-footer mt-16 pt-5 border-t border-slate-200 flex items-end justify-between gap-6">
+          <Logo className="w-12 h-12 text-slate-400 shrink-0" />
+          <div className="text-xs text-slate-500 space-y-1 text-right">
+            {!isCredit && company.bankAccount && (
+              <p>Betales til konto {company.bankAccount} innen {fmtDate(invoice.dueDate)}.</p>
+            )}
+            {isCredit && invoice.creditsInvoiceId && <p>Denne kreditnotaen gjelder en tidligere utstedt faktura.</p>}
+            {company.name && <p>{company.name}{company.orgNumber ? ` · Org.nr. ${company.orgNumber}` : ''}</p>}
+          </div>
         </div>
       </div>
     </div>

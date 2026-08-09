@@ -47,4 +47,19 @@ body {
     margin: 2cm 1.5cm;
     size: A4;
   }
+
+  /* Fakturaen skal bruke hele arket, ikke klumpe seg øverst. Arket er 297 mm
+     høyt minus 2 cm marg i topp og bunn, altså 257 mm innhold; vi sikter litt
+     under for å ikke presse fram en tom side to. Bunnfeltet skyves ned med
+     margin-top: auto, slik at betalingsinformasjonen står nederst på siden
+     uansett hvor mange linjer fakturaen har. */
+  .invoice-sheet {
+    display: flex;
+    flex-direction: column;
+    min-height: 250mm;
+  }
+
+  .invoice-footer {
+    margin-top: auto;
+  }
 }

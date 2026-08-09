@@ -16,7 +16,7 @@ type Filter = 'alle' | 'kladd' | 'utestående' | 'betalt'
 export default function InvoiceListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { invoices, loading } = useInvoices(user)
+  const { invoices, loading, error } = useInvoices(user)
   const [year, setYear] = useState(() => parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
   const [filter, setFilter] = useState<Filter>('alle')
   const [showCustomers, setShowCustomers] = useState(false)
@@ -92,11 +92,27 @@ export default function InvoiceListPage() {
           ))}
         </div>
 
+        {error && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>
+        )}
+
         {loading ? (
           <div className="text-center text-slate-400 py-12">Laster...</div>
         ) : shown.length === 0 ? (
-          <div className="text-center py-16 text-slate-400">
-            <p className="text-sm">{yearInvoices.length === 0 ? `Ingen fakturaer i ${year} ennå.` : 'Ingen fakturaer i dette filteret.'}</p>
+          <div className="text-center py-16 text-slate-400 space-y-1">
+            <p className="text-sm">
+              {yearInvoices.length === 0 ? `Ingen fakturaer i ${year}.` : 'Ingen fakturaer i dette filteret.'}
+            </p>
+            {/* Uten denne linja ser en tom liste helt lik ut enten du mangler
+                fakturaer eller bare har valgt feil år. */}
+            {yearInvoices.length === 0 && invoices.length > 0 && (
+              <p className="text-xs">
+                Du har {invoices.length} fakturaer i andre år. Bytt år øverst til høyre.
+              </p>
+            )}
+            {invoices.length === 0 && !error && (
+              <p className="text-xs">Lag en ny faktura, eller importer fra det gamle systemet.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
