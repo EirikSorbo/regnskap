@@ -9,6 +9,9 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const AddReceiptPage = lazy(() => import('./pages/AddReceiptPage'))
 const ReportPage = lazy(() => import('./pages/ReportPage'))
+const InvoiceListPage = lazy(() => import('./pages/InvoiceListPage'))
+const InvoiceEditPage = lazy(() => import('./pages/InvoiceEditPage'))
+const InvoiceViewPage = lazy(() => import('./pages/InvoiceViewPage'))
 
 function Loading() {
   return <div className="min-h-screen flex items-center justify-center text-slate-400">Laster...</div>
@@ -37,6 +40,10 @@ export default function App() {
             <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
             <Route path="/add" element={<PrivateRoute><AddReceiptPage /></PrivateRoute>} />
             <Route path="/rapport" element={<PrivateRoute><ReportPage /></PrivateRoute>} />
+            <Route path="/fakturaer" element={<PrivateRoute><InvoiceListPage /></PrivateRoute>} />
+            <Route path="/faktura/ny" element={<PrivateRoute><InvoiceEditPage /></PrivateRoute>} />
+            <Route path="/faktura/:id" element={<PrivateRoute><InvoiceViewPage /></PrivateRoute>} />
+            <Route path="/faktura/:id/rediger" element={<PrivateRoute><InvoiceEditPage /></PrivateRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

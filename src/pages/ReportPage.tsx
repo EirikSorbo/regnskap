@@ -8,6 +8,7 @@ import {
   type Entry, type ReceiptEntry, type DrivingEntry, type IncomeEntry,
   CATEGORIES, SETTINGS_MANAGED_POSTS, entryAmount, calcEkom, postSums, getImagePaths,
 } from '../types'
+import { type Invoice, statusLabel, numberGaps } from '../lib/invoice'
 import { kr2 as fmt, krInt as fmtInt, MONTHS, QUARTERS } from '../lib/format'
 import { IconArrowLeft, IconPrint } from '../components/icons'
 import { format } from 'date-fns'
@@ -39,6 +40,7 @@ export default function ReportPage() {
 
   const [entries, setEntries] = useState<Entry[]>([])
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -47,9 +49,15 @@ export default function ReportPage() {
     Promise.all([
       getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid))),
       getDocs(query(collection(db, 'income'), where('userId', '==', user.uid))),
-    ]).then(([receiptSnap, incomeSnap]) => {
+      // Fakturajournalen er et tillegg til rapporten. Kan den ikke leses (for
+      // eksempel før de nye sikkerhetsreglene er publisert), skal resten av
+      // rapporten fortsatt komme opp — journalen utelates bare.
+      getDocs(query(collection(db, 'invoices'), where('userId', '==', user.uid)))
+        .catch(err => { console.warn('Fakturaer kunne ikke leses:', err); return null }),
+    ]).then(([receiptSnap, incomeSnap, invoiceSnap]) => {
       setEntries(receiptSnap.docs.map(d => ({ id: d.id, ...d.data() } as Entry)))
       setIncomeEntries(incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as IncomeEntry)))
+      setInvoices(invoiceSnap ? invoiceSnap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice)) : [])
       setLoading(false)
     }).catch(err => {
       // Uten dette ble siden stående på «Laster rapport...» for alltid ved feil.
@@ -74,6 +82,18 @@ export default function ReportPage() {
   const yearEntries = entries.filter(e => e.date.startsWith(String(year)))
   const yearIncome = incomeEntries.filter(e => e.date.startsWith(String(year)))
   const totalIncome = yearIncome.reduce((s, e) => s + e.amount, 0)
+
+  // Fakturajournal: alt som er utstedt i året, i nummerrekkefølge. Kladder er
+  // ikke bilag og hører ikke hjemme her.
+  const todayIso = format(new Date(), 'yyyy-MM-dd')
+  const yearInvoices = invoices
+    .filter(i => i.issueDate?.startsWith(String(year)) && i.status !== 'kladd')
+    .sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
+  const invoicedTotal = yearInvoices
+    .filter(i => !i.historical)
+    .reduce((s, i) => s + (i.kind === 'kreditnota' ? -i.total : i.total), 0)
+  const gapsInSeries = numberGaps(
+    yearInvoices.map(i => i.number).filter((n): n is number => typeof n === 'number'))
 
   const getAmount = (entry: Entry) => entryAmount(entry, ratePerKm, ratePerPassengerKm)
 
@@ -418,6 +438,56 @@ export default function ReportPage() {
               </table>
               <p className="text-xs text-slate-300 mt-6">
                 Totalt {Array.from(attachmentMap.values()).reduce((s, a) => s + a.length, 0)} vedlegg
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* === FAKTURAJOURNAL === */}
+        {yearInvoices.length > 0 && (
+          <div className="page-break-after">
+            <div className="pt-8 pb-8">
+              <div className="border-t-4 border-slate-800 pt-6 mb-8">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-[0.15em]">Salgsdokumentasjon</p>
+                <h2 className="text-2xl font-bold text-slate-800 mt-1">Fakturajournal {year}</h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-slate-200">
+                    <th className="text-left py-2 font-semibold text-slate-600">Nr.</th>
+                    <th className="text-left py-2 font-semibold text-slate-600">Dato</th>
+                    <th className="text-left py-2 font-semibold text-slate-600">Kunde</th>
+                    <th className="text-left py-2 font-semibold text-slate-600">Status</th>
+                    <th className="text-right py-2 font-semibold text-slate-600">Beløp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {yearInvoices.map(inv => (
+                    <tr key={inv.id} className="border-b border-slate-100">
+                      <td className="py-2 font-mono text-slate-500 tabular-nums">{inv.number ?? '—'}</td>
+                      <td className="py-2 text-slate-600 tabular-nums whitespace-nowrap">{format(new Date(inv.issueDate), 'dd.MM.yyyy')}</td>
+                      <td className="py-2 text-slate-700">{inv.customer?.name}</td>
+                      <td className="py-2 text-slate-500">{statusLabel(inv, todayIso)}</td>
+                      <td className="py-2 text-right tabular-nums font-medium text-slate-800">
+                        {inv.kind === 'kreditnota' ? `−${fmt(inv.total)}` : fmt(inv.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-300">
+                    <td colSpan={4} className="py-3 font-semibold text-slate-600">Sum fakturert {year}</td>
+                    <td className="py-3 text-right tabular-nums font-bold text-slate-800">{fmt(invoicedTotal)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+              {gapsInSeries.length > 0 && (
+                <p className="text-xs text-amber-700 mt-4">
+                  Merk: nummerrekken har hull ved {gapsInSeries.join(', ')}. Fakturaer kan være utstedt i et annet år.
+                </p>
+              )}
+              <p className="text-xs text-slate-300 mt-6">
+                Fakturaene er ført som inntekt på fakturadatoen. Kladder har ikke nummer og er ikke ført.
               </p>
             </div>
           </div>

@@ -62,6 +62,9 @@ export interface IncomeEntry {
   amount: number
   date: string
   description?: string
+  /** Satt når inntekten kommer fra en utstedt faktura. Da eies raden av
+   *  fakturaen og skal ikke slettes for seg: retting skjer med kreditnota. */
+  invoiceId?: string
   createdAt: number
 }
 

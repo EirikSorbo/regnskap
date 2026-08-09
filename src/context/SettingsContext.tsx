@@ -20,6 +20,26 @@ export interface UserSettings {
   lastBackupAt?: number  // timestamp of last full backup
   postNumbersMigrated?: boolean
   shadowReceiptsRemoved?: boolean  // engangs-migrering: skjulte EKOM/HK/avskr.-kvitteringer slettet
+  // --- Fakturering ---
+  company?: CompanyInfo  // avsenderopplysningene på fakturaen
+  /** Neste ledige fakturanummer. Tildeles i en transaksjon ved utstedelse, så
+   *  rekken blir fortløpende og uten hull. Kommer du fra et tidligere system,
+   *  settes den over det høyeste nummeret du brukte der. */
+  nextInvoiceNumber?: number
+  paymentTermsDays?: number  // standard betalingsfrist
+}
+
+/** Foretaket som sender fakturaen. Ingen MVA-felter: virksomheten er ikke
+ *  registrert i Merverdiavgiftsregisteret. */
+export interface CompanyInfo {
+  name?: string
+  address?: string
+  postalCode?: string
+  city?: string
+  orgNumber?: string
+  email?: string
+  phone?: string
+  bankAccount?: string
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {

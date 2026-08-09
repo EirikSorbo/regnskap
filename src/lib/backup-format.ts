@@ -29,6 +29,8 @@ export interface BackupEntry {
   id?: string
   userId?: string
   date?: string
+  /** Fakturaer dateres med issueDate, ikke date. */
+  issueDate?: string
   imagePath?: string
   imagePaths?: string[]
   [key: string]: unknown
@@ -37,6 +39,9 @@ export interface BackupEntry {
 export interface BackupData {
   receipts?: BackupEntry[]
   income?: BackupEntry[]
+  /** Fakturaer og kunderegister. Mangler i backuper tatt før faktureringen. */
+  invoices?: BackupEntry[]
+  customers?: BackupEntry[]
   settings?: Record<string, unknown>
   exportedAt?: string
   year?: number | string
@@ -88,23 +93,35 @@ export function matchesYear(d: { date?: string }, yearFilter?: number): boolean 
   return !!d.date?.startsWith(String(yearFilter))
 }
 
+/** Samme regel for fakturaer, som dateres med issueDate. Fakturadatoen er den
+ *  som styrer hvilket regnskapsår fakturaen hører til. */
+export function invoiceMatchesYear(inv: BackupEntry, yearFilter?: number): boolean {
+  return matchesYear({ date: inv.issueDate }, yearFilter)
+}
+
 /** JSON-innholdet i en backup. Innstillingene tas bare med i en full backup
  *  (uten årsfilter) — en delvis backup skal ikke kunne overskrive hele
  *  oppsettet ditt ved gjenoppretting. */
 export function buildBackupData(input: {
   receipts: BackupEntry[]
   income: BackupEntry[]
+  invoices?: BackupEntry[]
+  customers?: BackupEntry[]
   settings?: Record<string, unknown>
   attachments?: Attachment[]
   yearFilter?: number
   now?: Date
 }): BackupData {
-  const { receipts, income, settings, attachments, yearFilter, now = new Date() } = input
+  const { receipts, income, invoices, customers, settings, attachments, yearFilter, now = new Date() } = input
   return {
     exportedAt: now.toISOString(),
     year: yearFilter ?? 'alle',
     receipts: receipts.filter((r) => matchesYear(r, yearFilter)),
     income: income.filter((i) => matchesYear(i, yearFilter)),
+    invoices: invoices?.filter((i) => invoiceMatchesYear(i, yearFilter)),
+    // Kunderegisteret er ikke knyttet til et år, og tas alltid med i sin
+    // helhet. Et halvt kunderegister er ikke til nytte for noen.
+    customers,
     settings: yearFilter ? undefined : settings,
     attachments,
   }

@@ -23,7 +23,7 @@ import { ReceiptListModal } from '../components/ReceiptListModal'
 import { IconCar, IconGear, IconOverview, IconPhone, IconPlus } from '../components/icons'
 
 const YEAR_KEY = 'selected_year'
-const VERSION = 'v1.50'
+const VERSION = 'v1.51'
 
 // De to lagene over forsiden. Erstatter sju uavhengige boolske flagg. Skuff og
 // modal er skilt fordi modalene åpnes OPPÅ oversiktsskuffen: lukker du modalen,
@@ -236,6 +236,12 @@ export default function DashboardPage() {
         </div>
 
         <BackupReminder lastBackupAt={settings.lastBackupAt} busy={busy} onBackup={() => handleFullBackup()} />
+
+        <button onClick={() => navigate('/fakturaer')}
+          className="w-full flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
+          <span>Fakturaer</span>
+          <span className="text-slate-400 text-base">→</span>
+        </button>
 
         <div className="flex gap-2">
           <QuickAdd label="Utstyr" onClick={() => navigate('/add?post=6500')} />

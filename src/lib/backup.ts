@@ -45,14 +45,33 @@ async function fetchBlob(path: string): Promise<Blob> {
 /** Henter alle kvitteringer og inntekter for brukeren. Backupen leser alltid
  *  ferskt fra Firestore i stedet for fra det siden har i minnet, så en delvis
  *  lastet skjerm ikke kan gi en delvis backup. */
+/** Henter alt som skal sikkerhetskopieres.
+ *
+ *  Feiler én samling, KASTER vi i stedet for å hoppe over den. En backup som ser
+ *  vellykket ut, men mangler fakturaene fordi sikkerhetsreglene ikke er
+ *  publisert, er nettopp den typen stille hull en backup ikke skal ha. */
 async function fetchUserData(uid: string) {
-  const [receiptSnap, incomeSnap] = await Promise.all([
-    getDocs(query(collection(db, 'receipts'), where('userId', '==', uid))),
-    getDocs(query(collection(db, 'income'), where('userId', '==', uid))),
+  const forUser = async (name: string) => {
+    try {
+      return await getDocs(query(collection(db, name), where('userId', '==', uid)))
+    } catch (err) {
+      throw new Error(
+        `Kunne ikke lese «${name}». Er de oppdaterte sikkerhetsreglene publisert i Firebase Console? ` +
+        'Backupen er avbrutt, for den ville ellers blitt ufullstendig uten å si fra.',
+        { cause: err },
+      )
+    }
+  }
+  const [receiptSnap, incomeSnap, invoiceSnap, customerSnap] = await Promise.all([
+    forUser('receipts'), forUser('income'), forUser('invoices'), forUser('customers'),
   ])
+  const rows = (snap: Awaited<ReturnType<typeof forUser>>) =>
+    snap.docs.map((d) => ({ id: d.id, ...d.data() })) as BackupEntry[]
   return {
     receipts: receiptSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as (Entry & BackupEntry)[],
-    income: incomeSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as BackupEntry[],
+    income: rows(incomeSnap),
+    invoices: rows(invoiceSnap),
+    customers: rows(customerSnap),
   }
 }
 
@@ -80,10 +99,10 @@ async function addAttachments(
 /** Bare dataene, som JSON. Vedleggsregisteret er med selv om filene ikke er
  *  det, slik at en JSON-backup kan pares med en separat vedleggs-ZIP. */
 export async function downloadJsonBackup(uid: string, settings: UserSettings, categories: Category[], yearFilter?: number) {
-  const { receipts, income } = await fetchUserData(uid)
+  const { receipts, income, invoices, customers } = await fetchUserData(uid)
   const entries = receipts.filter((e) => !yearFilter || e.date?.startsWith(String(yearFilter)))
   const data = buildBackupData({
-    receipts, income, settings: { ...settings },
+    receipts, income, invoices, customers, settings: { ...settings },
     attachments: buildAttachmentMap(entries, categories),
     yearFilter,
   })
@@ -119,10 +138,10 @@ export async function downloadFullBackup(
   categories: Category[],
   yearFilter?: number,
 ): Promise<{ added: number; errors: string[] }> {
-  const { receipts, income } = await fetchUserData(uid)
+  const { receipts, income, invoices, customers } = await fetchUserData(uid)
   const entries = receipts.filter((e) => !yearFilter || e.date?.startsWith(String(yearFilter)))
   const attachments = buildAttachmentMap(entries, categories)
-  const data = buildBackupData({ receipts, income, settings: { ...settings }, attachments, yearFilter })
+  const data = buildBackupData({ receipts, income, invoices, customers, settings: { ...settings }, attachments, yearFilter })
   const { default: JSZip } = await import('jszip')
   const zip = new JSZip()
   zip.file(backupFileName('data', yearFilter, today()), JSON.stringify(data, null, 2))
@@ -187,20 +206,19 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   const { uid, parsed, mode, onStatus, applySettings } = opts
   const { data, attachmentFiles } = parsed
 
-  const [existingReceipts, existingIncome] = await Promise.all([
-    getDocs(query(collection(db, 'receipts'), where('userId', '==', uid))),
-    getDocs(query(collection(db, 'income'), where('userId', '==', uid))),
-  ])
+  const COLLECTIONS = ['receipts', 'income', 'invoices', 'customers'] as const
+  type CollectionName = typeof COLLECTIONS[number]
 
-  if (mode === 'restore') {
-    onStatus('Sletter eksisterende data...')
-    for (const d of existingReceipts.docs) await deleteDoc(doc(db, 'receipts', d.id))
-    for (const d of existingIncome.docs) await deleteDoc(doc(db, 'income', d.id))
-  }
-
-  const existingIds = {
-    receipts: mode === 'merge' ? new Set(existingReceipts.docs.map((d) => d.id)) : new Set<string>(),
-    income: mode === 'merge' ? new Set(existingIncome.docs.map((d) => d.id)) : new Set<string>(),
+  const existing = {} as Record<CollectionName, Set<string>>
+  for (const name of COLLECTIONS) {
+    const snap = await getDocs(query(collection(db, name), where('userId', '==', uid)))
+    if (mode === 'restore') {
+      onStatus('Sletter eksisterende data...')
+      for (const d of snap.docs) await deleteDoc(doc(db, name, d.id))
+      existing[name] = new Set<string>()
+    } else {
+      existing[name] = new Set(snap.docs.map((d) => d.id))
+    }
   }
 
   onStatus('Importerer...')
@@ -210,11 +228,11 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   // Bevar dokument-id-en fra backupen (setDoc), så en ny import av samme fil ikke
   // lager duplikater — den id-baserte dedup-en treffer da faktisk. Oppføringer
   // uten id (eldre backup-format) faller tilbake til addDoc.
-  async function writeAll(list: BackupEntry[], col: 'receipts' | 'income') {
+  async function writeAll(list: BackupEntry[], col: CollectionName) {
     for (const row of importableEntries(list, uid)) {
       const { id, ...fields } = row
       fields.userId = uid
-      if (id && existingIds[col].has(id)) { skipped++; continue }
+      if (id && existing[col].has(id)) { skipped++; continue }
       if (id) await setDoc(doc(db, col, String(id)), fields)
       else await addDoc(collection(db, col), fields)
       count++
@@ -222,6 +240,8 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   }
   await writeAll(data.receipts ?? [], 'receipts')
   await writeAll(data.income ?? [], 'income')
+  await writeAll(data.invoices ?? [], 'invoices')
+  await writeAll(data.customers ?? [], 'customers')
 
   let filesUploaded = 0
   let filesUnmatched = 0
@@ -263,8 +283,10 @@ export async function runImport(opts: ImportOptions): Promise<string> {
 /** Teksten som vises når en fil er lest, men før brukeren har valgt
  *  importmetode. Teller med samme regel som importen faktisk bruker. */
 export function describeParsedBackup(parsed: ParsedBackup, uid: string): string {
-  const receipts = importableEntries(parsed.data.receipts, uid).length
-  const income = importableEntries(parsed.data.income, uid).length
-  const att = parsed.attachmentFiles.length
-  return `Fil lest: ${receipts} utgifter, ${income} inntekter${att > 0 ? `, ${att} vedlegg` : ''}. Velg importmetode:`
+  const n = (list?: BackupEntry[]) => importableEntries(list, uid).length
+  const parts = [`${n(parsed.data.receipts)} utgifter`, `${n(parsed.data.income)} inntekter`]
+  if (n(parsed.data.invoices) > 0) parts.push(`${n(parsed.data.invoices)} fakturaer`)
+  if (n(parsed.data.customers) > 0) parts.push(`${n(parsed.data.customers)} kunder`)
+  if (parsed.attachmentFiles.length > 0) parts.push(`${parsed.attachmentFiles.length} vedlegg`)
+  return `Fil lest: ${parts.join(', ')}. Velg importmetode:`
 }

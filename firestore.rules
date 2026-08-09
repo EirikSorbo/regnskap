@@ -37,6 +37,26 @@ service cloud.firestore {
                           && isOwner(request.resource.data.userId);
     }
 
+    // Fakturaer. Samme eierskapsmodell. Merk at reglene her IKKE håndhever at en
+    // utstedt faktura ikke kan endres: den låsen ligger i appen (utstedelses-
+    // transaksjonen og skjermbildene). Det er bevisst, siden det bare er du selv
+    // som har tilgang til dine egne dokumenter uansett.
+    match /invoices/{id} {
+      allow read, delete: if isOwner(resource.data.userId);
+      allow create:       if isOwner(request.resource.data.userId);
+      allow update:       if isOwner(resource.data.userId)
+                          && isOwner(request.resource.data.userId);
+    }
+
+    // Kunderegister. Inneholder personopplysninger om kundene dine, så det er
+    // ekstra viktig at ingen andre kommer til.
+    match /customers/{id} {
+      allow read, delete: if isOwner(resource.data.userId);
+      allow create:       if isOwner(request.resource.data.userId);
+      allow update:       if isOwner(resource.data.userId)
+                          && isOwner(request.resource.data.userId);
+    }
+
     // Brukerinnstillinger: ett dokument per bruker, med uid som dokument-id.
     match /userSettings/{uid} {
       allow read, write: if isOwner(uid);

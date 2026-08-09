@@ -11,6 +11,7 @@ import { kr } from '../lib/format'
 import { Drawer, Section } from './Modal'
 import { CategoryEditor } from './CategoryEditor'
 import { AssetEditor } from './AssetEditor'
+import { CompanySection } from './CompanySection'
 import { IconTrash } from './icons'
 
 const inputClass = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -71,7 +72,14 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
   }
 
   async function handleDeleteIncome(entry: IncomeEntry) {
-    if (!entry.id || !confirm('Slett inntekt?')) return
+    if (!entry.id) return
+    // Inntekt som kommer fra en utstedt faktura eies av fakturaen. Slettes den
+    // her, står fakturaen igjen som utstedt uten å være ført noe sted.
+    if (entry.invoiceId) {
+      alert('Denne inntekten hører til en utstedt faktura og kan ikke slettes her.\n\nSkal beløpet reverseres, lager du en kreditnota på fakturaen.')
+      return
+    }
+    if (!confirm('Slett inntekt?')) return
     try { await deleteIncome(entry.id) } catch (e) { console.error(e) }
   }
 
@@ -194,6 +202,11 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
           )}
           <AssetEditor assets={settings.assets ?? []} year={selectedYear} onSave={(a) => updateSettings({ assets: a })} />
         </div>
+      </Section>
+
+      <Section title="Foretaksopplysninger" open={!!open.company} onToggle={() => toggle('company')}
+        summary={<span>{settings.company?.name ? 'Utfylt' : 'Mangler'}</span>}>
+        <CompanySection />
       </Section>
 
       <Section title="Kategorier" open={!!open.cats} onToggle={() => toggle('cats')}
