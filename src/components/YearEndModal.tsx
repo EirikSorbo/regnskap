@@ -1,5 +1,4 @@
-import { useAuth } from '../context/AuthContext'
-import { useInvoices } from '../hooks/useInvoices'
+import { useAccounting } from '../context/AccountingContext'
 import { type Entry, type IncomeEntry } from '../types'
 import { yearEndChecks } from '../lib/year-end'
 import { kr, fmtDate } from '../lib/format'
@@ -31,8 +30,7 @@ export function YearEndModal({ year, entries, yearIncome, lastBackupAt, onOpenEn
   onOpenBackup: () => void
   onClose: () => void
 }) {
-  const { user } = useAuth()
-  const { invoices, loading, error } = useInvoices(user)
+  const { invoices, invoicesLoading: loading, invoicesError: error } = useAccounting()
 
   const sjekk = yearEndChecks({ year, entries, yearIncome, invoices, lastBackupAt })
 

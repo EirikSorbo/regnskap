@@ -1,7 +1,5 @@
-import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { useAccounting } from '../context/AccountingContext'
-import { useInvoices } from '../hooks/useInvoices'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   type Entry, type ReceiptEntry, type DrivingEntry,
@@ -19,15 +17,16 @@ function attachmentRef(post: string, date: string, index: number, ext: string) {
 }
 
 export default function ReportPage() {
-  const { user } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { settings } = useSettings()
   // Regnskapet kommer fra den felles tilstanden, ikke fra en egen henting. Før
   // hentet denne siden de samme dokumentene en gang til, og året ble lest rett
   // fra localStorage: to kilder til de samme tallene, som kunne sprike.
-  const { entries, incomeEntries, loading: accLoading, error: accError, selectedYear } = useAccounting()
-  const { invoices, loading: invLoading, error: invError } = useInvoices(user)
+  const {
+    entries, incomeEntries, invoices, loading: accLoading, error: accError,
+    invoicesLoading: invLoading, invoicesError: invError, selectedYear,
+  } = useAccounting()
   const year = parseInt(searchParams.get('year') || String(selectedYear))
   const ys = String(year)
   const ratePerKm = settings.drivingRatePerKm

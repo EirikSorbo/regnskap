@@ -277,7 +277,11 @@ export async function runImport(opts: ImportOptions): Promise<string> {
       const path = findAttachmentPath(data, af.name)
       if (!path) { filesUnmatched++; continue }
       try {
-        await uploadBytes(ref(storage, path), af.blob)
+        // Innholdstypen utledes av filnavnet: blobben fra ZIP-en har ingen, og
+        // uten den blir filen liggende som «application/octet-stream». Da laster
+        // nettleseren den ned i stedet for å vise den. Nettopp dette skjedde med
+        // vedleggene som allerede lå der.
+        await uploadBytes(ref(storage, path), af.blob, { contentType: contentTypeFor(af.name) })
         filesUploaded++
       } catch (err) {
         console.warn('Vedlegg-feil:', af.name, err)
@@ -318,6 +322,21 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   if (filesUnmatched > 0) parts.push(`${filesUnmatched} vedlegg uten treff (gammel backup uten vedleggsregister)`)
   if (mode === 'restore') parts.unshift('Gjenopprettet')
   return `✓ ${parts.join(', ')}.`
+}
+
+const MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  heic: 'image/heic',
+  webp: 'image/webp',
+  gif: 'image/gif',
+}
+
+function contentTypeFor(filnavn: string): string {
+  const ext = filnavn.split('.').pop()?.toLowerCase() ?? ''
+  return MIME[ext] ?? 'application/octet-stream'
 }
 
 /** Teksten som vises når en fil er lest, men før brukeren har valgt

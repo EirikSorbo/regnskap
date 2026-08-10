@@ -6,6 +6,8 @@ import {
   CATEGORIES, SETTINGS_MANAGED_POSTS, entryAmount, postSums, getImageUrls,
 } from '../types'
 import { useAccountingData } from '../hooks/useAccountingData'
+import { useInvoices } from '../hooks/useInvoices'
+import type { Invoice } from '../lib/invoice'
 
 const YEAR_KEY = 'selected_year'
 
@@ -20,6 +22,12 @@ const YEAR_KEY = 'selected_year'
 interface AccountingContextType {
   entries: Entry[]
   incomeEntries: IncomeEntry[]
+  /** Alle fakturaer, alle år. Bor her fordi flere skjermer trengte dem og hver
+   *  hadde sitt eget abonnement, og fordi årslista ellers ikke ser år som bare
+   *  har fakturaer. */
+  invoices: Invoice[]
+  invoicesLoading: boolean
+  invoicesError: string
   loading: boolean
   /** Tom når alt gikk bra. Er den satt, er tallene under ufullstendige, og det
    *  MÅ vises på skjermen framfor å bli et stille galt resultat. */
@@ -50,6 +58,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const { entries, incomeEntries, loading, error } = useAccountingData(user)
+  const { invoices, loading: invoicesLoading, error: invoicesError } = useInvoices(user)
 
   const [selectedYear, setSelectedYear] = useState(() =>
     parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
@@ -78,10 +87,14 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
     const trips = yearEntries.filter(e => e.entryType === 'driving') as DrivingEntry[]
     const totalKm = trips.reduce((s, d) => s + (d.tripType === 'return' ? d.distance * 2 : d.distance), 0)
 
+    // Årslista skal dekke alt du har data i, ikke bare årene med utgifter.
+    // Fakturaene teller med: de eldste her går år tilbake, uten at det finnes
+    // en eneste kvittering fra samme år.
     const currentYear = new Date().getFullYear()
     const years = [...new Set([
       ...entries.map(e => parseInt(e.date.slice(0, 4))),
       ...incomeEntries.map(e => parseInt(e.date.slice(0, 4))),
+      ...invoices.map(i => parseInt((i.issueDate ?? '').slice(0, 4))),
       currentYear, currentYear - 1, currentYear - 2, selectedYear,
     ])].filter(Number.isFinite).sort((a, b) => b - a)
 
@@ -90,6 +103,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
 
     return {
       entries, incomeEntries, loading, error,
+      invoices, invoicesLoading, invoicesError,
       selectedYear, setSelectedYear, years,
       categories, amountOf,
       yearEntries, yearIncome, groups,
@@ -97,7 +111,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
       trips, totalKm, attachmentCount,
       usedPosts: new Set(entries.map(e => e.category.post)),
     }
-  }, [entries, incomeEntries, loading, error, selectedYear, settings])
+  }, [entries, incomeEntries, invoices, invoicesLoading, invoicesError, loading, error, selectedYear, settings])
 
   return <AccountingContext.Provider value={value}>{children}</AccountingContext.Provider>
 }

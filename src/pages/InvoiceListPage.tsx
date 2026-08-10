@@ -1,9 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
-import { useAuth } from '../context/AuthContext'
 import { useAccounting } from '../context/AccountingContext'
-import { useInvoices } from '../hooks/useInvoices'
 import { type Invoice, statusLabel, isOverdue, outstandingTotal } from '../lib/invoice'
 import { krExact, fmtDate } from '../lib/format'
 import { CustomerRegisterModal } from '../components/CustomerRegisterModal'
@@ -12,12 +10,10 @@ import { IconPlus } from '../components/icons'
 type Filter = 'alle' | 'kladd' | 'utestående' | 'betalt'
 
 export default function InvoiceListPage() {
-  const { user } = useAuth()
   const navigate = useNavigate()
-  const { invoices, loading, error } = useInvoices(user)
-  // Regnskapsåret er felles for hele appen og velges i innstillingene, slik at
-  // de to fanene aldri kan vise hvert sitt år.
-  const { selectedYear: year } = useAccounting()
+  // Både fakturaene og regnskapsåret kommer fra den felles tilstanden, så de to
+  // fanene aldri kan vise hvert sitt år eller hvert sitt sett fakturaer.
+  const { selectedYear: year, invoices, invoicesLoading: loading, invoicesError: error } = useAccounting()
   const [filter, setFilter] = useState<Filter>('alle')
   const [showCustomers, setShowCustomers] = useState(false)
   const today = format(new Date(), 'yyyy-MM-dd')

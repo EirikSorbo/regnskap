@@ -156,7 +156,10 @@ export default function AddReceiptPage() {
             const unique = `${Date.now().toString(36)}${i}-${Math.random().toString(36).slice(2, 8)}`
             const path = `receipts/${user.uid}/${categoryPost}-${date}-${unique}.${ext}`
             const storageRef = ref(storage, path)
-            await uploadBytes(storageRef, f)
+            // Innholdstypen MÅ settes. Uten den lagres filen som
+            // «application/octet-stream», og da laster nettleseren den ned i
+            // stedet for å vise den når du åpner lenken.
+            await uploadBytes(storageRef, f, f.type ? { contentType: f.type } : undefined)
             const url = await getDownloadURL(storageRef)
             imagePaths.push(path)
             imageUrls.push(url)

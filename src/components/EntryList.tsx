@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { type Entry, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
 import { kr, fmtDate } from '../lib/format'
 import { attachmentUrl, openAttachment } from '../lib/attachments'
+import { AttachmentModal } from './AttachmentModal'
 import { IconPaperclip, IconPencil, IconTrash } from './icons'
 
 /** Lista over årets oppføringer på forsiden. Én rad utvides om gangen. */
@@ -14,6 +15,10 @@ export function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit
   getAmount: (e: Entry) => number
   emptyText?: string
 }) {
+  // Vedlegget som vises akkurat nå, om noe. Lever her og ikke i raden, så bare
+  // ett kan stå åpent om gangen.
+  const [vist, setVist] = useState<{ paths: string[]; urls: string[] } | null>(null)
+
   if (entries.length === 0) {
     return (
       <div className="text-center py-16 text-slate-400">
@@ -24,6 +29,7 @@ export function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit
   }
   return (
     <div className="space-y-2">
+      {vist && <AttachmentModal paths={vist.paths} urls={vist.urls} onClose={() => setVist(null)} />}
       {entries.map(e => {
         const isDriving = e.entryType === 'driving'
         const d = isDriving ? (e as DrivingEntry) : null
@@ -53,7 +59,7 @@ export function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit
                   skyves beløpet innover bare på radene med binders, og
                   kolonnen med kroner slutter å stå på linje nedover. */}
               {vedlegg.length > 0 ? (
-                <button type="button" onClick={() => openAttachment(stier[0], vedlegg[0])}
+                <button type="button" onClick={() => setVist({ paths: stier, urls: vedlegg })}
                   title={vedlegg.length > 1
                     ? `Åpne vedlegget (${vedlegg.length} i alt, resten ligger i raden)`
                     : 'Åpne vedlegget'}
