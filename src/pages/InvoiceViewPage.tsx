@@ -211,19 +211,27 @@ export default function InvoiceViewPage() {
               kreditnota er ikke et betalingskrav, så teksten gir ingen mening
               der. */}
           {!isCredit && (
-            <p className="text-[10px] italic text-slate-400 leading-snug">
-              Ved betaling etter forfall kan det påløpe renter og gebyr etter statens satser.
-              Ved innsigelse vil kravet kunne bli sendt til forliksrådet, jf. tvistelovens § 5-2.
-            </p>
+            <div className="text-[10px] italic text-slate-400 leading-snug">
+              <p>Ved betaling etter forfall kan det påløpe renter og gebyr etter statens satser.</p>
+              <p>Ved innsigelse vil kravet kunne bli sendt til forliksrådet, jf. tvistelovens § 5-2.</p>
+            </div>
           )}
           <div className="mt-3 pt-5 border-t border-slate-200 flex items-end justify-between gap-6">
-            <Logo className="w-12 h-12 text-slate-400 shrink-0" />
+            {/* Foretaksnavnet står sentrert under logoen. Derfor bærer teksten til
+                høyre bare organisasjonsnummeret: ellers ville navnet stått to
+                ganger i samme bunnfelt. */}
+            <div className="flex flex-col items-center shrink-0">
+              <Logo className="w-12 h-12 text-slate-400" />
+              {company.name && (
+                <p className="text-[10px] text-slate-500 mt-1 text-center">{company.name}</p>
+              )}
+            </div>
             <div className="text-xs text-slate-500 space-y-1 text-right">
               {!isCredit && company.bankAccount && (
                 <p>Betales til konto {company.bankAccount} innen {fmtDate(invoice.dueDate)}.</p>
               )}
               {isCredit && invoice.creditsInvoiceId && <p>Denne kreditnotaen gjelder en tidligere utstedt faktura.</p>}
-              {company.name && <p>{company.name}{company.orgNumber ? ` · Org.nr. ${company.orgNumber}` : ''}</p>}
+              {company.orgNumber && <p>Org.nr. {company.orgNumber}</p>}
             </div>
           </div>
         </div>
