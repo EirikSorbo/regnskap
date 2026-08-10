@@ -1,10 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
-import { useAccounting } from '../context/AccountingContext'
-import { type ReceiptEntry, getImagePaths } from '../types'
 import { readBackupFile, runImport, describeParsedBackup, type ParsedBackup } from '../lib/backup'
-import { repairContentTypes } from '../lib/attachments'
 import { Drawer } from './Modal'
 import { IconUpload } from './icons'
 
@@ -24,31 +21,8 @@ export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, on
 }) {
   const { user } = useAuth()
   const { settings, updateSettings } = useSettings()
-  const { entries } = useAccounting()
   const [status, setStatus] = useState('')
   const [pending, setPending] = useState<ParsedBackup | null>(null)
-  const [retter, setRetter] = useState(false)
-  const [retteStatus, setRetteStatus] = useState('')
-
-  const vedleggsstier = entries.flatMap(e =>
-    e.entryType === 'receipt' ? getImagePaths(e as ReceiptEntry) : [])
-
-  async function rettInnholdstyper() {
-    setRetter(true)
-    setRetteStatus('Retter …')
-    try {
-      const r = await repairContentTypes(vedleggsstier,
-        (ferdig, total) => setRetteStatus(`Retter ${ferdig} av ${total} …`))
-      const deler = [`${r.rettet} vedlegg rettet`]
-      if (r.hoppetOver > 0) deler.push(`${r.hoppetOver} hoppet over (ukjent filtype)`)
-      if (r.feilet > 0) deler.push(`${r.feilet} feilet`)
-      setRetteStatus(`✓ ${deler.join(', ')}.`)
-    } catch (err) {
-      setRetteStatus('Feil: ' + (err instanceof Error ? err.message : String(err)))
-    } finally {
-      setRetter(false)
-    }
-  }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -82,7 +56,7 @@ export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, on
   }
 
   function close() {
-    setStatus(''); setPending(null); setRetteStatus(''); onClose()
+    setStatus(''); setPending(null); onClose()
   }
 
   return (
@@ -124,30 +98,6 @@ export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, on
           <span className="text-slate-400 text-base">→</span>
         </button>
       </div>
-
-      {/* Engangsjobb: vedlegg lastet opp uten innholdstype ligger som
-          «application/octet-stream», og lastes ned i stedet for å vises. Dette
-          retter metadataen på filene som allerede ligger der. Nye opplastinger
-          får riktig type av seg selv. */}
-      {vedleggsstier.length > 0 && (
-        <div className="border-t border-slate-100 pt-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Vedlikehold</p>
-          <p className="text-xs text-slate-400 mb-3">
-            Lastes vedlegg ned i stedet for å vises? Dette setter riktig filtype på alle
-            {' '}{vedleggsstier.length} vedleggene, og merker dem som noe som skal vises i
-            nettleseren. Selve filene røres ikke.
-          </p>
-          <button onClick={rettInnholdstyper} disabled={retter}
-            className="w-full text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 disabled:opacity-60 transition">
-            {retter ? 'Retter …' : 'Rett filtype på vedlegg'}
-          </button>
-          {retteStatus && (
-            <p className={`text-xs mt-2 px-1 ${retteStatus.startsWith('✓') ? 'text-green-600' : retteStatus.startsWith('Feil') ? 'text-red-500' : 'text-slate-400'}`}>
-              {retteStatus}
-            </p>
-          )}
-        </div>
-      )}
 
       <div className="border-t border-slate-100 pt-4">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Import</p>
