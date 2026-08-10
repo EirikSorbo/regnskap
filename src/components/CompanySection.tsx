@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSettings, type CompanyInfo } from '../context/SettingsContext'
 import { DEFAULT_PAYMENT_TERMS_DAYS } from '../lib/invoice'
+import { DEFAULT_SHORTCUT_NAME, SHORTCUT_RECIPE } from '../lib/invoice-email'
 
 const inp = 'w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
@@ -16,6 +17,8 @@ export function CompanySection() {
   const [nextNumber, setNextNumber] = useState(String(settings.nextInvoiceNumber ?? 1))
   const [numberTouched, setNumberTouched] = useState(false)
   const [terms, setTerms] = useState(String(settings.paymentTermsDays ?? DEFAULT_PAYMENT_TERMS_DAYS))
+  const [emailMethod, setEmailMethod] = useState(settings.emailMethod ?? 'mailto')
+  const [shortcutName, setShortcutName] = useState(settings.shortcutName ?? DEFAULT_SHORTCUT_NAME)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -33,6 +36,8 @@ export function CompanySection() {
       await updateSettings({
         company: draft,
         paymentTermsDays: Math.max(0, parseInt(terms, 10) || DEFAULT_PAYMENT_TERMS_DAYS),
+        emailMethod,
+        shortcutName: shortcutName.trim() || DEFAULT_SHORTCUT_NAME,
         ...(numberTouched && Number.isFinite(parsedNumber) && parsedNumber >= 1
           ? { nextInvoiceNumber: parsedNumber }
           : {}),
@@ -73,6 +78,33 @@ export function CompanySection() {
           <label className="block text-xs text-slate-500 mb-1">Betalingsfrist (dager)</label>
           <input value={terms} onChange={e => setTerms(e.target.value)} inputMode="numeric" className={inp} />
         </div>
+      </div>
+
+      <div className="border-t border-slate-100 pt-2 space-y-2">
+        <label className="block text-xs text-slate-500">Send på e-post</label>
+        <select value={emailMethod} onChange={e => setEmailMethod(e.target.value as 'mailto' | 'shortcut')}
+          className={`${inp} bg-white`}>
+          <option value="mailto">Åpne e-post (uten vedlegg)</option>
+          <option value="shortcut">Via snarvei på Mac (med vedlegg)</option>
+        </select>
+        {emailMethod === 'mailto' ? (
+          <p className="text-xs text-slate-400">
+            E-posten åpnes med mottaker, emne og tekst utfylt. PDF-en må du legge ved selv:
+            en mailto-lenke kan ikke ha vedlegg.
+          </p>
+        ) : (
+          <>
+            <input value={shortcutName} onChange={e => setShortcutName(e.target.value)}
+              placeholder={DEFAULT_SHORTCUT_NAME} className={inp} />
+            <p className="text-xs text-slate-400">
+              Navnet på snarveien i Snarveier, skrevet helt likt. Lagre PDF-en først,
+              trykk så «Send på e-post». Snarveien trenger disse trinnene:
+            </p>
+            <ol className="text-xs text-slate-400 list-decimal pl-4 space-y-0.5">
+              {SHORTCUT_RECIPE.map(t => <li key={t}>{t}</li>)}
+            </ol>
+          </>
+        )}
       </div>
 
       {msg && <p className={`text-xs ${msg.startsWith('Feil') ? 'text-red-500' : 'text-green-600'}`}>{msg}</p>}

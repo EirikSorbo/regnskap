@@ -28,6 +28,12 @@ export interface UserSettings {
    *  settes den over det høyeste nummeret du brukte der. */
   nextInvoiceNumber?: number
   paymentTermsDays?: number  // standard betalingsfrist
+  /** Hvordan «Send på e-post» oppfører seg. «mailto» åpner e-posten med
+   *  mottaker, emne og tekst, men uten vedlegg (mailto kan ikke ha vedlegg).
+   *  «shortcut» sender opplysningene til en snarvei på Mac, som kan finne den
+   *  lagrede PDF-en og legge den ved. */
+  emailMethod?: 'mailto' | 'shortcut'
+  shortcutName?: string
 }
 
 /** Foretaket som sender fakturaen. Ingen MVA-felter: virksomheten er ikke

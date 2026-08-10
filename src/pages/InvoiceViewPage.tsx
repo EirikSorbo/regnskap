@@ -10,6 +10,9 @@ import {
 } from '../lib/invoice'
 import { issueInvoice, markPaid, markUnpaid, deleteDraft, createCreditNote } from '../lib/invoice-store'
 import { kr, fmtDate } from '../lib/format'
+import {
+  invoiceEmailSubject, invoiceEmailBody, mailtoUrl, shortcutUrl, DEFAULT_SHORTCUT_NAME,
+} from '../lib/invoice-email'
 import { IconArrowLeft, IconPrint } from '../components/icons'
 import { Logo } from '../components/Logo'
 
@@ -47,6 +50,22 @@ export default function InvoiceViewPage() {
     document.title = invoiceFileName(invoice, settings.company?.name)
     return () => { document.title = previous }
   }, [invoice, settings.company?.name])
+
+  /** Åpner e-posten. Med snarvei-metoden går opplysningene til Snarveier, som
+   *  kan legge ved PDF-en du nettopp lagret; med mailto blir vedlegget noe du
+   *  drar inn selv, fordi mailto-standarden ikke har plass til filer. */
+  function handleEmail(inv: Invoice) {
+    const companyName = settings.company?.name
+    const subject = invoiceEmailSubject(inv, companyName)
+    const to = inv.customer.email
+    window.location.href = settings.emailMethod === 'shortcut'
+      ? shortcutUrl({
+          name: settings.shortcutName?.trim() || DEFAULT_SHORTCUT_NAME,
+          to, subject,
+          fileName: `${invoiceFileName(inv, companyName)}.pdf`,
+        })
+      : mailtoUrl({ to, subject, body: invoiceEmailBody(inv, companyName) })
+  }
 
   async function run(fn: () => Promise<void>) {
     setBusy(true); setError('')
@@ -114,6 +133,10 @@ export default function InvoiceViewPage() {
             <button onClick={() => window.print()}
               className="bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2">
               <IconPrint /> Last ned PDF
+            </button>
+            <button onClick={() => handleEmail(invoice)}
+              className="text-sm text-slate-700 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50">
+              Send på e-post
             </button>
           </div>
         </div>
