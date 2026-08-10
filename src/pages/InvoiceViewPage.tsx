@@ -164,7 +164,8 @@ export default function InvoiceViewPage() {
         )}
         {invoice.historical && (
           <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
-            Importert fra et tidligere system. Den er ikke ført som inntekt her, fordi beløpet allerede er bokført der.
+            Importert fra et tidligere system, og har ingen egen inntektsføring her.
+            Beløpet teller likevel med i oversikten og årsrapporten for det året.
           </p>
         )}
       </div>

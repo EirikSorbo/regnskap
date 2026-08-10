@@ -28,9 +28,11 @@ export default function InvoiceListPage() {
   })
 
   // Fakturert = utstedte fakturaer og kreditnotaer, altså det som faktisk er
-  // ført som inntekt. Kladder teller ikke, de er ikke bilag ennå.
+  // ført som inntekt. Kladder teller ikke, de er ikke bilag ennå. Importerte
+  // fakturaer teller med: de er inntekten for de årene, og er det eneste
+  // regnskapet appen har derfra.
   const invoiced = yearInvoices
-    .filter(i => i.status !== 'kladd' && !i.historical)
+    .filter(i => i.status !== 'kladd')
     .reduce((s, i) => s + (i.kind === 'kreditnota' ? -i.total : i.total), 0)
   const outstanding = outstandingTotal(yearInvoices)
   const overdueCount = yearInvoices.filter(i => isOverdue(i, today)).length

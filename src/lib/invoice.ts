@@ -67,8 +67,12 @@ export interface Invoice {
   incomeId?: string
   /** For kreditnota: fakturaen som krediteres. */
   creditsInvoiceId?: string
-  /** Importert fra et tidligere system. Fører ALDRI inntekt, fordi de tallene
-   *  allerede er bokført et annet sted. Ren dokumentasjon. */
+  /** Importert fra et tidligere system.
+   *
+   *  Har ingen rad i income-samlingen, siden importen aldri inntektsførte. Den
+   *  teller likevel som inntekt i oversikten og årsrapporten for sitt år: appen
+   *  har ingen annen kilde til de årene, og uten den viste de null. Se
+   *  lib/income.ts. Kan ikke krediteres. */
   historical?: boolean
   createdAt: number
 }

@@ -7,6 +7,7 @@ import {
 } from '../types'
 import { useAccountingData } from '../hooks/useAccountingData'
 import { useInvoices } from '../hooks/useInvoices'
+import { effectiveIncome } from '../lib/income'
 import type { Invoice } from '../lib/invoice'
 
 const YEAR_KEY = 'selected_year'
@@ -21,6 +22,9 @@ const YEAR_KEY = 'selected_year'
  *  at appen husker året mellom besøk. */
 interface AccountingContextType {
   entries: Entry[]
+  /** Inntektsradene PLUSS de utstedte fakturaene som aldri fikk en. Se
+   *  lib/income.ts: uten dette viste oversikten null for årene som bare har
+   *  importerte fakturaer. De tilførte radene er utledet, ikke lagret. */
   incomeEntries: IncomeEntry[]
   /** Alle fakturaer, alle år. Bor her fordi flere skjermer trengte dem og hver
    *  hadde sitt eget abonnement, og fordi årslista ellers ikke ser år som bare
@@ -57,7 +61,7 @@ const AccountingContext = createContext<AccountingContextType | null>(null)
 export function AccountingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const { settings } = useSettings()
-  const { entries, incomeEntries, loading, error } = useAccountingData(user)
+  const { entries, incomeEntries: raaInntekter, loading, error } = useAccountingData(user)
   const { invoices, loading: invoicesLoading, error: invoicesError } = useInvoices(user)
 
   const [selectedYear, setSelectedYear] = useState(() =>
@@ -66,6 +70,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
   useEffect(() => { localStorage.setItem(YEAR_KEY, String(selectedYear)) }, [selectedYear])
 
   const value = useMemo<AccountingContextType>(() => {
+    const incomeEntries = effectiveIncome(raaInntekter, invoices)
     const categories = settings.categories ?? CATEGORIES
     const amountOf = (e: Entry) =>
       entryAmount(e, settings.drivingRatePerKm, settings.drivingRatePerPassengerKm)
@@ -111,7 +116,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
       trips, totalKm, attachmentCount,
       usedPosts: new Set(entries.map(e => e.category.post)),
     }
-  }, [entries, incomeEntries, invoices, invoicesLoading, invoicesError, loading, error, selectedYear, settings])
+  }, [entries, raaInntekter, invoices, invoicesLoading, invoicesError, loading, error, selectedYear, settings])
 
   return <AccountingContext.Provider value={value}>{children}</AccountingContext.Provider>
 }

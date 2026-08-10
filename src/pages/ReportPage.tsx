@@ -65,8 +65,10 @@ export default function ReportPage() {
   const yearInvoices = invoices
     .filter(i => i.issueDate?.startsWith(String(year)) && i.status !== 'kladd')
     .sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
+  // Historiske fakturaer holdes ikke lenger utenfor. De teller som inntekt i
+  // regnskapet (se lib/income.ts), og da måtte journalens sum følge etter,
+  // ellers ville avstemmingen under peke på et avvik som ikke finnes.
   const invoicedTotal = yearInvoices
-    .filter(i => !i.historical)
     .reduce((s, i) => s + (i.kind === 'kreditnota' ? -i.total : i.total), 0)
   const gapsInSeries = invoiceNumberGaps(yearInvoices)
 
