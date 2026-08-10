@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   calcDrivingAmount, drivingAmount, calcEkom, filterEntries, managedPostAmount,
-  parseReceiptText, saldoDepreciation, saldoBalance, entriesToCsv, entryAmount, postSums,
+  saldoDepreciation, saldoBalance, entriesToCsv, entryAmount, postSums,
   taxPaidSummary,
   type DrivingEntry, type Entry, type Asset,
 } from './types.ts'
@@ -106,26 +106,6 @@ test('managedPostAmount: null for ikke-styrte poster; 0 for år uten data', () =
   assert.equal(managedPostAmount('6500', ms, 2025), null)
   assert.equal(managedPostAmount('7770', ms, 2024), 0)
   assert.equal(managedPostAmount('7500', ms, 2024), 0)
-})
-
-// --- parseReceiptText ---
-test('parseReceiptText: foretrekker beløp på «totalt»-linje og leser dd.mm.åååå', () => {
-  const t = 'Kiwi Storgata\n12.05.2025\nBrød 25,00\nMelk 20,50\nTotalt 45,50'
-  assert.deepEqual(parseReceiptText(t), { amount: 45.5, date: '2025-05-12' })
-})
-test('parseReceiptText: leser åååå-mm-dd og «SUM» med kr-suffiks', () => {
-  const t = 'REMA 1000\nDato 2025-11-03\nSUM 199,90 kr'
-  assert.deepEqual(parseReceiptText(t), { amount: 199.9, date: '2025-11-03' })
-})
-test('parseReceiptText: tusenskille og 2-sifret år', () => {
-  const t = 'Kvittering 03/01/24\nBeløp NOK 1 234,50'
-  assert.deepEqual(parseReceiptText(t), { amount: 1234.5, date: '2024-01-03' })
-})
-test('parseReceiptText: uten nøkkelord tas største pengetall', () => {
-  assert.equal(parseReceiptText('Butikk\n10,00\n250,00\n5,50').amount, 250)
-})
-test('parseReceiptText: heltall uten desimaler (org.nr) plukkes ikke som beløp', () => {
-  assert.deepEqual(parseReceiptText('Org 123456789\nTakk'), {})
 })
 
 // --- saldoavskrivning (#2) ---

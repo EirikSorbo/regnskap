@@ -261,11 +261,6 @@ export function postSums(
   return groups
 }
 
-/** Trekker ut beløp og dato fra OCR-råtekst av en kvittering. Ren og testbar;
- *  selve tekstgjenkjenningen (Tesseract) skjer i AddReceiptPage. Heuristikk:
- *  dato som dd.mm.åååå / åååå-mm-dd; beløp = største «pengeaktige» tall (to
- *  desimaler), helst på en linje med «sum/totalt/å betale». Resultatet er et
- *  FORSLAG brukeren bekrefter/retter — aldri en stille sannhet. */
 export function parseReceiptText(text: string): { amount?: number; date?: string } {
   const out: { amount?: number; date?: string } = {}
 

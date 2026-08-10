@@ -4,11 +4,11 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
-import { CATEGORIES, DRIVING_CATEGORY, SETTINGS_MANAGED_POSTS, parseReceiptText, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
+import { CATEGORIES, DRIVING_CATEGORY, SETTINGS_MANAGED_POSTS, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { deleteStoragePaths } from '../lib/entries'
-import { IconArrowLeft, IconCamera, IconCheck, IconPaperclip } from '../components/icons'
+import { IconArrowLeft, IconCheck, IconPaperclip } from '../components/icons'
 
 export default function AddReceiptPage() {
   const { user } = useAuth()
@@ -45,38 +45,6 @@ export default function AddReceiptPage() {
   // File attachments
   const [files, setFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // OCR-skanning (on-device via Tesseract, lastet fra CDN kun ved bruk)
-  const scanInputRef = useRef<HTMLInputElement>(null)
-  const [scanning, setScanning] = useState(false)
-  const [scanMsg, setScanMsg] = useState('')
-
-  async function handleScan(file: File) {
-    setScanning(true)
-    setScanMsg('Skanner … (laster ned tekstgjenkjenning første gang)')
-    try {
-      // Tesseract.js kjører helt on-device (WASM i nettleseren); vi laster kun
-      // biblioteket + språkdata fra CDN ved første skann. @vite-ignore holder den
-      // utenfor bunten. Feiler noe, faller vi tilbake til manuell utfylling.
-      const url = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js'
-      const mod = await import(/* @vite-ignore */ url)
-      const recognize = mod.recognize ?? mod.default?.recognize
-      if (typeof recognize !== 'function') throw new Error('Tesseract utilgjengelig')
-      const { data } = await recognize(file, 'nor+eng')
-      const { amount: amt, date: dt } = parseReceiptText(String(data?.text || ''))
-      const found: string[] = []
-      if (amt != null) { setAmount(String(amt)); found.push(`beløp ${amt.toLocaleString('nb-NO')}`) }
-      if (dt) { setDate(dt); found.push(`dato ${dt}`) }
-      setFiles(prev => [...prev, file])   // legg bildet ved som vedlegg
-      setScanMsg(found.length
-        ? `Foreslo ${found.join(' og ')} — kontrollér at det stemmer.`
-        : 'Fant ikke beløp/dato automatisk. Bildet er lagt ved; fyll inn manuelt.')
-    } catch {
-      setScanMsg('Kunne ikke skanne (nettverk eller filformat). Fyll inn manuelt.')
-    } finally {
-      setScanning(false)
-    }
-  }
 
   // Shared
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -313,17 +281,6 @@ export default function AddReceiptPage() {
           </>
         ) : (
           <div>
-            {/* OCR: skann kvittering og fyll inn beløp/dato automatisk */}
-            <div className="mb-4">
-              <input ref={scanInputRef} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleScan(f); if (scanInputRef.current) scanInputRef.current.value = '' }} />
-              <button type="button" onClick={() => scanInputRef.current?.click()} disabled={scanning}
-                className="w-full flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg py-2.5 text-sm font-medium hover:bg-blue-100 disabled:opacity-60 transition">
-                <IconCamera />
-                {scanning ? 'Skanner …' : 'Skann kvittering – fyll inn automatisk'}
-              </button>
-              {scanMsg && <p className="text-xs text-slate-500 mt-1.5">{scanMsg}</p>}
-            </div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Beløp (kr)</label>
             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} required
               min="0" step="0.01"
