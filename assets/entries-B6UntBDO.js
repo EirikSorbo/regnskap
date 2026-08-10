@@ -1,0 +1,1 @@
+import{a as e,c as t,t as n,x as r}from"./firebase-BRVzpSdP.js";import{i,n as a}from"./firebase-CZywkCJr.js";import{j as o}from"./icons-Di6YGOAN.js";async function s(t){for(let r of t)if(r)try{await n(e(i,r))}catch{}}async function c(e){e.id&&(e.entryType===`receipt`&&await s(o(e)),await t(r(a,`receipts`,e.id)))}export{s as n,c as t};
