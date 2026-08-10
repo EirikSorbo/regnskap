@@ -24,7 +24,7 @@ import { YearChartModal } from '../components/YearChartModal'
 import { IconCar, IconGear, IconInvoice, IconOverview, IconPhone } from '../components/icons'
 
 const YEAR_KEY = 'selected_year'
-const VERSION = 'v1.71'
+const VERSION = 'v1.72'
 
 // De to lagene over forsiden. Erstatter sju uavhengige boolske flagg. Skuff og
 // modal er skilt fordi modalene åpnes OPPÅ oversiktsskuffen: lukker du modalen,
@@ -122,7 +122,9 @@ export default function DashboardPage() {
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-            <p className="text-xs text-slate-400">{user?.email} <span className="text-slate-300">{VERSION}</span></p>
+            {/* Hvem du er logget inn som står i innstillingene, rett over «Logg
+                ut». Her holder versjonen. */}
+            <p className="text-xs text-slate-300">{VERSION}</p>
           </div>
           <div className="flex items-center gap-1">
             <HeaderButton title="Fakturaer" onClick={() => navigate('/fakturaer')}><IconInvoice /></HeaderButton>

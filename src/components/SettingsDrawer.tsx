@@ -218,6 +218,9 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
       </Section>
 
       <div className="border-t border-slate-100 pt-4">
+        <p className="text-xs text-slate-400 mb-2">
+          Logget inn som: <span className="font-medium text-slate-600">{user?.email}</span>
+        </p>
         <button onClick={() => signOut(auth)}
           className="w-full text-sm text-red-500 border border-red-200 rounded-lg py-2 hover:bg-red-50 transition">
           Logg ut
