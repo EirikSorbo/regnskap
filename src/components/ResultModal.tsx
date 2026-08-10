@@ -1,11 +1,11 @@
-import { type PostGroup } from '../types'
+import { type PostGroup, taxPaidSummary } from '../types'
 import { krInt } from '../lib/format'
 import { ModalShell } from './Modal'
 import { IconX } from './icons'
 
 /** Resultatoppstillingen for året, slik den ser ut i Altinn: inntekt, hver post,
  *  og driftsresultatet nederst. */
-export function ResultModal({ year, groups, totalIncome, totalExpenses, entryCount, tripCount, totalKm, onClose }: {
+export function ResultModal({ year, groups, totalIncome, totalExpenses, entryCount, tripCount, totalKm, taxPaidTerms, onClose }: {
   year: number
   groups: PostGroup[]
   totalIncome: number
@@ -13,9 +13,12 @@ export function ResultModal({ year, groups, totalIncome, totalExpenses, entryCou
   entryCount: number
   tripCount: number
   totalKm: number
+  /** Innbetalt forskuddsskatt per termin for året, hvis noe er registrert. */
+  taxPaidTerms?: number[]
   onClose: () => void
 }) {
   const result = totalIncome - totalExpenses
+  const { paid, rate } = taxPaidSummary(taxPaidTerms, result)
   const active = groups.filter(g => g.sum > 0)
   const topCost = active.length > 0 ? active.reduce((a, b) => a.sum > b.sum ? a : b) : null
 
@@ -96,6 +99,29 @@ export function ResultModal({ year, groups, totalIncome, totalExpenses, entryCou
           </span>
         </div>
       </div>
+
+      {/* Forskuddsskatten står utenfor driftsresultatet, med en strek imellom:
+          den er ikke en kostnad i foretaket og skal ikke leses som en del av
+          regnskapet. Linja måler bare hvor stor andel av det du har tjent som
+          allerede er innbetalt, og sier ingenting om hva du skylder. */}
+      {paid > 0 && (
+        <div className="mx-4 mb-4 rounded-xl border border-slate-200 px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Forskuddsskatt {year}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {krInt(paid)} kr innbetalt
+                {rate === null && `. Resultatet er ikke positivt, så andelen kan ikke regnes ut.`}
+              </p>
+            </div>
+            {rate !== null && (
+              <span className="text-2xl font-bold tabular-nums text-slate-700">
+                {(rate * 100).toFixed(1).replace('.', ',')} %
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </ModalShell>
   )
 }

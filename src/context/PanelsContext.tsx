@@ -140,6 +140,7 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
           entryCount={acc.yearEntries.length}
           tripCount={acc.trips.length}
           totalKm={acc.totalKm}
+          taxPaidTerms={settings.forskuddsskatt?.[String(acc.selectedYear)]}
           onClose={() => setModal(null)}
         />
       )}

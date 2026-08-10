@@ -4,10 +4,10 @@ import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { useAccounting } from '../context/AccountingContext'
 import { usePanels } from '../context/PanelsContext'
-import { type Entry, filterEntries, taxPaidSummary } from '../types'
+import { type Entry, filterEntries } from '../types'
 import { useMigrations } from '../hooks/useMigrations'
 import { deleteEntry } from '../lib/entries'
-import { kr, krInt } from '../lib/format'
+import { kr } from '../lib/format'
 import { EntryList } from '../components/EntryList'
 import { BackupReminder } from '../components/BackupReminder'
 import { AppHeader } from '../components/AppHeader'
@@ -22,7 +22,7 @@ export default function DashboardPage() {
   const {
     loading, selectedYear, yearEntries, totalIncome, totalExpenses, amountOf,
   } = useAccounting()
-  const { openPanel, busy, runFullBackup } = usePanels()
+  const { busy, runFullBackup } = usePanels()
 
   useMigrations(user, settings, updateSettings)
 
@@ -61,13 +61,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <TaxCard
-          year={selectedYear}
-          paidTerms={settings.forskuddsskatt?.[String(selectedYear)]}
-          result={totalIncome - totalExpenses}
-          onEdit={() => openPanel('settings')}
-        />
-
         <BackupReminder lastBackupAt={settings.lastBackupAt} busy={busy} onBackup={() => runFullBackup()} />
 
         <div className="flex gap-2">
@@ -93,41 +86,6 @@ export default function DashboardPage() {
         )}
       </div>
     </div>
-  )
-}
-
-/** Hva du har betalt i forskuddsskatt, målt mot det du har tjent.
- *
- *  Kortet regner ikke ut hva du skylder, og skal ikke leses som det. Det viser
- *  én ting: hvor stor andel av årets resultat som allerede er innbetalt, slik
- *  at du selv ser om terminene ligger an til å treffe. */
-function TaxCard({ year, paidTerms, result, onEdit }: {
-  year: number
-  paidTerms?: number[]
-  result: number
-  onEdit: () => void
-}) {
-  const { paid, rate } = taxPaidSummary(paidTerms, result)
-  if (paid === 0) return null
-
-  return (
-    <button onClick={onEdit}
-      className="w-full text-left bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm hover:bg-slate-50 transition">
-      <div className="flex items-baseline justify-between">
-        <span className="text-sm font-semibold text-slate-700">Forskuddsskatt {year}</span>
-        {rate !== null && (
-          <span className="text-lg font-bold text-slate-800 tabular-nums">
-            {`${(rate * 100).toFixed(1).replace('.', ',')} %`}
-          </span>
-        )}
-      </div>
-      <p className="text-xs text-slate-400 mt-1">
-        {krInt(paid)} innbetalt
-        {rate === null
-          ? `. Resultatet i ${year} er ikke positivt, så andelen kan ikke regnes ut.`
-          : ` av et resultat på ${krInt(result)}`}
-      </p>
-    </button>
   )
 }
 
