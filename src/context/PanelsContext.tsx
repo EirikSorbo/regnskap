@@ -12,6 +12,7 @@ import { EkomModal } from '../components/EkomModal'
 import { ResultModal } from '../components/ResultModal'
 import { ReceiptListModal } from '../components/ReceiptListModal'
 import { YearChartModal } from '../components/YearChartModal'
+import { YearEndModal } from '../components/YearEndModal'
 
 /** Skuffene og modalene som ligger over sidene, med staten som styrer dem.
  *
@@ -23,7 +24,7 @@ import { YearChartModal } from '../components/YearChartModal'
  *  oversiktsskuffen: lukker du modalen, skal du tilbake til skuffen, ikke helt
  *  ut. */
 type DrawerName = 'settings' | 'overview'
-type ModalName = 'ekom' | 'result' | 'receipts' | 'backup' | 'chart'
+type ModalName = 'ekom' | 'result' | 'receipts' | 'backup' | 'chart' | 'yearend'
 export type PanelName = DrawerName | ModalName
 
 interface PanelsContextType {
@@ -108,6 +109,7 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
           onOpenChart={() => setModal('chart')}
           onOpenReport={() => { setDrawer(null); navigate(`/rapport?year=${acc.selectedYear}`) }}
           onOpenReceipts={() => setModal('receipts')}
+          onOpenYearEnd={() => setModal('yearend')}
           onOpenBackup={() => setModal('backup')}
           onClose={() => setDrawer(null)}
         />
@@ -144,6 +146,18 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
 
       {modal === 'receipts' && (
         <ReceiptListModal entries={acc.entries} onClose={() => setModal(null)} />
+      )}
+
+      {modal === 'yearend' && (
+        <YearEndModal
+          year={acc.selectedYear}
+          entries={acc.yearEntries}
+          lastBackupAt={settings.lastBackupAt}
+          onOpenEntry={id => { setModal(null); setDrawer(null); navigate(`/add?edit=${id}`) }}
+          onOpenInvoices={() => { setModal(null); setDrawer(null); navigate('/fakturaer') }}
+          onOpenBackup={() => setModal('backup')}
+          onClose={() => setModal(null)}
+        />
       )}
 
       {modal === 'chart' && (

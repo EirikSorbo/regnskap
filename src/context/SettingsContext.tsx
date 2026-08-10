@@ -15,6 +15,10 @@ export interface UserSettings {
   hjemmekontorEntryIds: Record<string, string>
   avskrivningerAmounts: Record<string, number>
   avskrivningerEntryIds: Record<string, string>
+  /** Innbetalt forskuddsskatt per år, fire terminer. Brukes bare til å vise hva
+   *  du faktisk har betalt målt mot resultatet; den rører ikke regnskapet, for
+   *  skatt er ikke en kostnad i et enkeltpersonforetak. */
+  forskuddsskatt: Record<string, number[]>
   categories?: Category[]  // brukerens redigerbare kontoplan; default = CATEGORIES
   assets?: Asset[]  // driftsmiddel-register for saldoavskrivning (post 6000)
   lastBackupAt?: number  // timestamp of last full backup
@@ -63,6 +67,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   hjemmekontorEntryIds: {},
   avskrivningerAmounts: {},
   avskrivningerEntryIds: {},
+  forskuddsskatt: {},
   categories: CATEGORIES,
 }
 

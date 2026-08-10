@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   calcDrivingAmount, drivingAmount, calcEkom, filterEntries, managedPostAmount,
   parseReceiptText, saldoDepreciation, saldoBalance, entriesToCsv, entryAmount, postSums,
+  taxPaidSummary,
   type DrivingEntry, type Entry, type Asset,
 } from './types.ts'
 
@@ -206,4 +207,25 @@ test('postSums: oppføring på en post som ikke finnes i kontoplanen tas med til
   assert.deepEqual(groups.map(g => g.cat.post), ['7080', '6500'])
   assert.equal(groups.reduce((s, g) => s + g.sum, 0), 2200)
   assert.equal(groups[1].cat.label, 'Utstyr')  // navnet hentes fra oppføringen selv
+})
+
+test('taxPaidSummary: summerer terminene og måler dem mot resultatet', () => {
+  const { paid, rate } = taxPaidSummary([10000, 10000, 0, 0], 80000)
+  assert.equal(paid, 20000)
+  assert.equal(rate, 0.25)
+})
+
+test('taxPaidSummary: uten registrerte terminer er andelen null, ikke udefinert', () => {
+  assert.deepEqual(taxPaidSummary(undefined, 50000), { paid: 0, rate: 0 })
+})
+
+// Uten dette hadde et år i minus gitt en negativ prosent på kortet, som ville
+// lest som om skatten var betalt tilbake.
+test('taxPaidSummary: resultat i null eller minus gir ingen andel', () => {
+  assert.equal(taxPaidSummary([5000], 0).rate, null)
+  assert.equal(taxPaidSummary([5000], -20000).rate, null)
+})
+
+test('taxPaidSummary: ugyldige beløp teller som 0', () => {
+  assert.equal(taxPaidSummary([5000, NaN, undefined as unknown as number], 10000).paid, 5000)
 })

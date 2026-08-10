@@ -162,6 +162,23 @@ export function calcEkom(
   return { totalPhone, totalInternet, totalGross, deduction, net }
 }
 
+/** Antall terminer forskuddsskatten betales over i året. */
+export const TAX_TERMS = 4
+
+/** Innbetalt forskuddsskatt målt mot resultatet så langt i år.
+ *
+ *  Satsen er ren måling, ikke en beregning av hva du skylder: den sier hvor
+ *  stor andel av det du har tjent som allerede er innbetalt. Går resultatet i
+ *  null eller minus, finnes ingen meningsfull andel, og satsen er null. Det er
+ *  forskjellig fra 0 %, som ville betydd at ingenting er betalt. */
+export function taxPaidSummary(
+  paidTerms: number[] | undefined,
+  result: number,
+): { paid: number; rate: number | null } {
+  const paid = (paidTerms ?? []).reduce((s, v) => s + (Number(v) || 0), 0)
+  return { paid, rate: result > 0 ? paid / result : null }
+}
+
 // Delmengden av innstillingene som styrer de tre postene EKOM/hjemmekontor/
 // avskrivninger. UserSettings er strukturelt tilordnbar hit (unngår import-sykel
 // mot SettingsContext).

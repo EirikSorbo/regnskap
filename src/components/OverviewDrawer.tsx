@@ -8,13 +8,14 @@ import { IconUpload } from './icons'
 /** Oversiktsskuffen: inngangene til rapport, vedlegg og backup, pluss import.
  *  Importen bor her fordi den er en skjermflyt (les fil → vis hva som ble
  *  funnet → velg metode); selve skrivingen ligger i lib/backup. */
-export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, onOpenChart, onOpenReport, onOpenReceipts, onOpenBackup, onClose }: {
+export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, onOpenChart, onOpenReport, onOpenReceipts, onOpenYearEnd, onOpenBackup, onClose }: {
   selectedYear: number
   attachmentCount: number
   onOpenResult: () => void
   onOpenChart: () => void
   onOpenReport: () => void
   onOpenReceipts: () => void
+  onOpenYearEnd: () => void
   onOpenBackup: () => void
   onClose: () => void
 }) {
@@ -82,6 +83,12 @@ export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, on
         className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition">
         <span>Kvitteringer</span>
         <span className="text-slate-400 text-xs font-normal">{attachmentCount} vedlegg →</span>
+      </button>
+
+      <button onClick={onOpenYearEnd}
+        className="w-full flex items-center justify-between text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition">
+        <span>Årsavslutning {selectedYear}</span>
+        <span className="text-slate-400 text-xs font-normal">Sjekkliste →</span>
       </button>
 
       <div className="border-t border-slate-100 pt-4">

@@ -4,7 +4,7 @@ import { auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { usePanels } from '../context/PanelsContext'
-import { CATEGORIES, calcEkom } from '../types'
+import { CATEGORIES, TAX_TERMS, calcEkom, taxPaidSummary } from '../types'
 import { kr } from '../lib/format'
 import { Drawer, Section } from './Modal'
 import { CategoryEditor } from './CategoryEditor'
@@ -36,12 +36,17 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, usedPosts
     settings.ekomPrivateAmt,
   )
 
+  const { paid: taxPaid } = taxPaidSummary(settings.forskuddsskatt?.[ys], 0)
+
   // Seksjonene er uavhengige: flere kan stå åpne samtidig, som før.
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const toggle = (name: string) => setOpen(o => ({ ...o, [name]: !o[name] }))
 
   const [ratePerKm, setRatePerKm] = useState(settings.drivingRatePerKm)
   const [ratePerPassengerKm, setRatePerPassengerKm] = useState(settings.drivingRatePerPassengerKm)
+
+  const [taxTerms, setTaxTerms] = useState<string[]>(Array(TAX_TERMS).fill(''))
+  const [savingTax, setSavingTax] = useState(false)
 
   const [hjemmekontorAmt, setHjemmekontorAmt] = useState('')
   const [savingHjemmekontor, setSavingHjemmekontor] = useState(false)
@@ -52,7 +57,9 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, usedPosts
   useEffect(() => {
     setHjemmekontorAmt(String(settings.hjemmekontorAmounts[ys] || ''))
     setAvskrivningerAmt(String(settings.avskrivningerAmounts[ys] || ''))
-  }, [ys, settings.hjemmekontorAmounts, settings.avskrivningerAmounts])
+    const paid = settings.forskuddsskatt?.[ys] ?? []
+    setTaxTerms(Array.from({ length: TAX_TERMS }, (_, i) => String(paid[i] || '')))
+  }, [ys, settings.hjemmekontorAmounts, settings.avskrivningerAmounts, settings.forskuddsskatt])
 
   /** Satsene skrives rett til innstillingene når brukeren endrer dem. Dette lå
    *  før i to effekter som speilet state begge veier og måtte holdes utenfor
@@ -63,6 +70,22 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, usedPosts
     if (field === 'drivingRatePerKm') setRatePerKm(safe)
     else setRatePerPassengerKm(safe)
     void updateSettings({ [field]: safe })
+  }
+
+  async function saveTax() {
+    setSavingTax(true)
+    try {
+      await updateSettings({
+        forskuddsskatt: {
+          ...settings.forskuddsskatt,
+          [ys]: taxTerms.map(t => parseFloat(t) || 0),
+        },
+      })
+    } catch (err) {
+      alert('Kunne ikke lagre: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSavingTax(false)
+    }
   }
 
   async function saveYearAmount(
@@ -117,6 +140,30 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, usedPosts
             className="w-full flex items-center justify-between text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
             <span>Åpne kalkulatoren</span>
             <span className="text-slate-400 text-base">→</span>
+          </button>
+        </div>
+      </Section>
+
+      {/* Forskuddsskatt er ikke en kostnad i foretaket, så beløpene her rører
+          ikke resultatet. De brukes bare til å vise hvor stor andel av det du
+          har tjent som allerede er innbetalt. */}
+      <Section title="Forskuddsskatt" open={!!open.tax} onToggle={() => toggle('tax')}
+        summary={taxPaid > 0 ? <span>{kr(taxPaid)}</span> : null}>
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-slate-400">Innbetalt per termin i {selectedYear}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {taxTerms.map((t, i) => (
+              <div key={i}>
+                <label className="block text-xs text-slate-500 mb-0.5">{i + 1}. termin</label>
+                <input type="number" value={t} inputMode="decimal" min="0" step="1" placeholder="0"
+                  onChange={e => setTaxTerms(ts => ts.map((v, j) => j === i ? e.target.value : v))}
+                  className={numberClass} />
+              </div>
+            ))}
+          </div>
+          <button onClick={saveTax} disabled={savingTax}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded-lg transition">
+            {savingTax ? '...' : 'Lagre'}
           </button>
         </div>
       </Section>
