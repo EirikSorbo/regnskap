@@ -149,11 +149,14 @@ export default function InvoiceViewPage() {
             </h1>
             <p className="text-sm text-slate-500 mt-1 print:hidden">Status: {statusLabel(invoice, today)}</p>
           </div>
-          {/* Avsenderblokken er sentrert, ikke høyrestilt, nettopp for at logoen
-              skal stå midt over foretaksnavnet. */}
-          <div className="flex flex-col items-center text-center text-sm text-slate-600">
-            <Logo className="w-12 h-12 text-slate-400 mb-2" />
-            <p className="font-semibold text-slate-800">{company.name || 'Foretaksnavn mangler'}</p>
+          <div className="text-right text-sm text-slate-600">
+            {/* Logoen og navnet står i en egen kolonne som blir akkurat så bred
+                som navnet. Da havner logoen midt over «Sørbø Musikk», mens
+                kolonnen selv, og resten av linjene, forblir høyrejustert. */}
+            <div className="inline-flex flex-col items-center">
+              <Logo className="w-12 h-12 text-slate-400 mb-2" />
+              <p className="font-semibold text-slate-800">{company.name || 'Foretaksnavn mangler'}</p>
+            </div>
             {company.address && <p>{company.address}</p>}
             {(company.postalCode || company.city) && <p>{[company.postalCode, company.city].filter(Boolean).join(' ')}</p>}
             {company.orgNumber && <p className="mt-1">Org.nr. {company.orgNumber}</p>}
