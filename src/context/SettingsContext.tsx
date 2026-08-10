@@ -20,6 +20,7 @@ export interface UserSettings {
   lastBackupAt?: number  // timestamp of last full backup
   postNumbersMigrated?: boolean
   shadowReceiptsRemoved?: boolean  // engangs-migrering: skjulte EKOM/HK/avskr.-kvitteringer slettet
+  deliveryFieldsRemoved?: boolean  // engangs-migrering: leveringsdato/-sted ryddet av fakturaene
   // --- Fakturering ---
   company?: CompanyInfo  // avsenderopplysningene på fakturaen
   /** Neste ledige fakturanummer. Tildeles i en transaksjon ved utstedelse, så
