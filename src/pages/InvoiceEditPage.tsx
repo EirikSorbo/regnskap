@@ -127,11 +127,7 @@ export default function InvoiceEditPage() {
         </section>
 
         <section>
-          <h2 className="text-sm font-semibold text-slate-700 mb-1">Linjer</h2>
-          <p className="text-xs text-slate-400 mb-2">
-            Dato og sted hører til den enkelte jobben, ikke fakturaen. Dekker fakturaen to spillejobber,
-            får hver linje sin egen.
-          </p>
+          <h2 className="text-sm font-semibold text-slate-700 mb-2">Linjer</h2>
           <div className="space-y-3">
             {lines.map((l, i) => (
               <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
@@ -141,18 +137,6 @@ export default function InvoiceEditPage() {
                   <button type="button" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}
                     disabled={lines.length === 1} title="Fjern linje"
                     className="text-slate-300 hover:text-red-400 disabled:opacity-30 p-2 shrink-0"><IconTrash /></button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs text-slate-400 mb-0.5">Dato</label>
-                    <input type="date" value={l.date ?? ''} onChange={e => setLine(i, { date: e.target.value })}
-                      className={inp} />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs text-slate-400 mb-0.5">Sted</label>
-                    <input value={l.place ?? ''} onChange={e => setLine(i, { place: e.target.value })}
-                      className={inp} placeholder="F.eks. Fiskebrygga" />
-                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-20">

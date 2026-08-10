@@ -4,7 +4,7 @@
 //  Reglene bor i invoice.ts; her er kallene som gjør dem virkelige.
 // ---------------------------------------------------------------------------
 
-import { collection, doc, addDoc, updateDoc, deleteDoc, deleteField, runTransaction } from 'firebase/firestore'
+import { collection, doc, addDoc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore'
 import { db } from '../firebase'
 import { stripUndefined } from './firestore-data'
 import {
@@ -28,8 +28,6 @@ function draftFields(uid: string, input: DraftInput) {
     description: l.description,
     quantity: Number(l.quantity) || 0,
     unitPrice: Number(l.unitPrice) || 0,
-    ...(l.date?.trim() ? { date: l.date.trim() } : {}),
-    ...(l.place?.trim() ? { place: l.place.trim() } : {}),
   }))
   // Siste skanse mot undefined-felter: Firestore avviser dem, og feilen kommer
   // først når du trykker lagre. Kunden kan komme både fra registeret og fra
@@ -56,14 +54,7 @@ export async function createDraft(uid: string, input: DraftInput): Promise<strin
 /** Lagrer endringer på en kladd. Utstedte fakturaer stoppes av utstedelses-
  *  transaksjonen og av at skjermbildet ikke tilbyr redigering. */
 export async function updateDraft(uid: string, id: string, input: DraftInput): Promise<void> {
-  await updateDoc(doc(db, 'invoices', id), {
-    ...draftFields(uid, input),
-    // Leveringen ligger på linjene nå. Er kladden fra før den endringen, bærer
-    // den et automatisk utfylt beløp på fakturanivå som ofte var feil dato —
-    // det ryddes vekk her i stedet for å bli stående og motsi linjene.
-    deliveryDate: deleteField(),
-    deliveryPlace: deleteField(),
-  })
+  await updateDoc(doc(db, 'invoices', id), draftFields(uid, input))
 }
 
 export async function deleteDraft(id: string): Promise<void> {
@@ -130,7 +121,6 @@ export async function createCreditNote(uid: string, original: Invoice, issueDate
     creditsInvoiceId: original.id,
     customer: original.customer,
     lines: original.lines,
-    // Linjene bærer leveringsopplysningene, og kopieres som de er.
     issueDate,
     note: `Kreditnota for faktura ${original.number ?? ''}`.trim(),
   })
