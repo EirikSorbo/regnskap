@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { type Entry, type ReceiptEntry, type DrivingEntry, getImageUrls, getImagePaths } from '../types'
 import { kr, fmtDate } from '../lib/format'
+import { attachmentUrl, openAttachment } from '../lib/attachments'
 import { IconPaperclip, IconPencil, IconTrash } from './icons'
 
 /** Lista over årets oppføringer på forsiden. Én rad utvides om gangen. */
@@ -27,6 +29,7 @@ export function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit
         const d = isDriving ? (e as DrivingEntry) : null
         // Kjøreturer har aldri vedlegg; bare kvitteringer kan vise bindersen.
         const vedlegg = isDriving ? [] : getImageUrls(e as ReceiptEntry)
+        const stier = isDriving ? [] : getImagePaths(e as ReceiptEntry)
         return (
           <div key={e.id} className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
             {/* Bindersen ligger UTENFOR rad-knappen. En lenke inni en knapp er
@@ -50,14 +53,14 @@ export function EntryList({ entries, expandedId, setExpandedId, onDelete, onEdit
                   skyves beløpet innover bare på radene med binders, og
                   kolonnen med kroner slutter å stå på linje nedover. */}
               {vedlegg.length > 0 ? (
-                <a href={vedlegg[0]} target="_blank" rel="noopener noreferrer"
+                <button type="button" onClick={() => openAttachment(stier[0], vedlegg[0])}
                   title={vedlegg.length > 1
                     ? `Åpne vedlegget (${vedlegg.length} i alt, resten ligger i raden)`
                     : 'Åpne vedlegget'}
                   className="w-10 shrink-0 flex items-center justify-center gap-0.5 text-slate-400 hover:text-blue-600 transition">
                   <IconPaperclip />
                   {vedlegg.length > 1 && <span className="text-[10px] font-semibold">{vedlegg.length}</span>}
-                </a>
+                </button>
               ) : (
                 <span className="w-10 shrink-0" aria-hidden="true" />
               )}
@@ -104,16 +107,56 @@ function ReceiptDetails({ entry }: { entry: ReceiptEntry }) {
       <p><span className="font-medium">Kategori:</span> {entry.category.label}</p>
       {entry.description && <p><span className="font-medium">Beskrivelse:</span> {entry.description}</p>}
       {urls.map((url, i) => paths[i]?.endsWith('.pdf') ? (
-        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+        <button key={i} type="button" onClick={() => openAttachment(paths[i], url)}
           className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs mt-1 mr-3">
           Åpne PDF {urls.length > 1 ? `(${i + 1})` : ''}
-        </a>
+        </button>
       ) : (
-        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-          <img src={url} alt={`Kvittering ${i + 1}`}
-            className="mt-2 rounded-lg border border-slate-200 max-h-48 object-contain w-full" />
-        </a>
+        <Vedleggsbilde key={i} path={paths[i]} fallback={url} nummer={i + 1} />
       ))}
     </div>
+  )
+}
+
+/** Kvitteringsbildet i den utfoldede raden.
+ *
+ *  Lenken hentes fra stien når bildet skal vises. Den lagrede lenken brukes bare
+ *  hvis oppføringen mangler sti, eller hvis oppslaget feiler (offline). */
+function Vedleggsbilde({ path, fallback, nummer }: { path?: string; fallback: string; nummer: number }) {
+  const [url, setUrl] = useState(path ? '' : fallback)
+  const [feilet, setFeilet] = useState(false)
+
+  useEffect(() => {
+    if (!path) return
+    let levende = true
+    attachmentUrl(path)
+      .then(u => { if (levende) setUrl(u) })
+      .catch(() => { if (levende) setUrl(fallback) })
+    return () => { levende = false }
+  }, [path, fallback])
+
+  if (!url) {
+    return <div className="mt-2 h-24 rounded-lg border border-slate-100 bg-slate-50 animate-pulse" />
+  }
+
+  // Et ødelagt bilde-ikon sier ingenting om hva som er galt. Denne teksten
+  // gjør det, og er tydelig på at filen ikke er tapt.
+  if (feilet) {
+    return (
+      <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+        <p>Kunne ikke vise vedlegget her.</p>
+        <button type="button" onClick={() => openAttachment(path, fallback)}
+          className="text-blue-600 hover:underline mt-1">
+          Prøv å åpne det i ny fane
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button type="button" onClick={() => openAttachment(path, fallback)} className="block w-full">
+      <img src={url} alt={`Kvittering ${nummer}`} onError={() => setFeilet(true)}
+        className="mt-2 rounded-lg border border-slate-200 max-h-48 object-contain w-full" />
+    </button>
   )
 }
