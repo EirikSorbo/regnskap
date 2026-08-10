@@ -10,7 +10,6 @@ import { deleteEntry } from '../lib/entries'
 import { kr } from '../lib/format'
 import { EntryList } from '../components/EntryList'
 import { BackupReminder } from '../components/BackupReminder'
-import { AppHeader } from '../components/AppHeader'
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -20,7 +19,7 @@ export default function DashboardPage() {
   // Regnskapet regnes ut i AccountingContext, og panelene bor i PanelsContext.
   // Forsiden er en av flere sider som viser dem, ikke eieren.
   const {
-    loading, selectedYear, yearEntries, totalIncome, totalExpenses, amountOf,
+    loading, error, selectedYear, yearEntries, totalIncome, totalExpenses, amountOf,
   } = useAccounting()
   const { busy, runFullBackup } = usePanels()
 
@@ -35,10 +34,14 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
-      <AppHeader />
-
+    <>
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
+
+        {/* En leseferil skal SES. Uten dette viste appen 0 kr i inntekt og et
+            flott overskudd når reglene slo til på inntektssamlingen. */}
+        {error && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>
+        )}
 
         {/* Årets regnskap i tre tall. Inntekten er den regnskapet fører, altså
             fakturaer på fakturadato pluss inntekt ført manuelt — samme tall som
@@ -85,7 +88,7 @@ export default function DashboardPage() {
           </>
         )}
       </div>
-    </div>
+    </>
   )
 }
 

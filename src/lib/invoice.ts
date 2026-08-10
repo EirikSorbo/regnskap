@@ -96,16 +96,31 @@ export function addDays(isoDate: string, days: number): string {
   return dt.toISOString().slice(0, 10)
 }
 
+/** Venter denne fakturaen fortsatt på penger?
+ *
+ *  Én regel, brukt av både telling og summering. Da de var to regler, talte
+ *  «Forfalt» med kreditnotaer som summen holdt utenfor, og skjermen kunne si
+ *  «1 faktura venter på betaling, til sammen 0 kr». En kreditnota er ikke et
+ *  betalingskrav og kan derfor verken være utestående eller forfalt. */
+export function isOutstanding(inv: Invoice): boolean {
+  return inv.status === 'utstedt' && inv.kind === 'faktura'
+}
+
+/** Fakturaene som venter på betaling. */
+export function outstandingInvoices(invoices: Invoice[]): Invoice[] {
+  return invoices.filter(isOutstanding)
+}
+
 /** Er fakturaen forfalt? Kun utstedte fakturaer kan forfalle; betalte og
- *  krediterte er gjort opp, og kladder er ikke sendt. */
+ *  krediterte er gjort opp, kladder er ikke sendt, og kreditnotaer krever
+ *  ingenting. */
 export function isOverdue(inv: Invoice, today: string): boolean {
-  return inv.status === 'utstedt' && inv.dueDate < today
+  return isOutstanding(inv) && inv.dueDate < today
 }
 
 /** Utestående beløp: det som er utstedt og ikke gjort opp. */
 export function outstandingTotal(invoices: Invoice[]): number {
-  return Math.round(invoices
-    .filter((i) => i.status === 'utstedt' && i.kind === 'faktura')
+  return Math.round(outstandingInvoices(invoices)
     .reduce((s, i) => s + i.total, 0) * 100) / 100
 }
 

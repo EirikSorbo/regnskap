@@ -5,6 +5,7 @@ import { useSettings } from './SettingsContext'
 import { useAccounting } from './AccountingContext'
 import { SETTINGS_MANAGED_POSTS } from '../types'
 import { downloadJsonBackup, downloadAttachmentZip, downloadFullBackup, downloadCsv } from '../lib/backup'
+import { Drawer } from '../components/Modal'
 import { SettingsDrawer } from '../components/SettingsDrawer'
 import { OverviewDrawer } from '../components/OverviewDrawer'
 import { BackupModal } from '../components/BackupModal'
@@ -40,7 +41,7 @@ const DRAWERS: PanelName[] = ['settings', 'overview']
 
 export function PanelsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const { settings, updateSettings } = useSettings()
+  const { settings, updateSettings, loading: settingsLoading } = useSettings()
   const acc = useAccounting()
   const navigate = useNavigate()
 
@@ -91,7 +92,17 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
     <PanelsContext.Provider value={{ openPanel, busy, runFullBackup: handleFullBackup }}>
       {children}
 
-      {drawer === 'settings' && (
+      {/* Skuffen tegnes ikke før innstillingene er lest. Skjemafeltene inni
+          leser verdiene sine én gang, ved montering, så en skuff åpnet mens
+          Firestore ennå svarte ville vist standardverdier — og «Lagre
+          kategorier» ville da skrevet standardkontoplanen over din egen. */}
+      {drawer === 'settings' && settingsLoading && (
+        <Drawer title="Innstillinger" onClose={() => setDrawer(null)}>
+          <p className="text-sm text-slate-400 py-8 text-center">Laster innstillinger...</p>
+        </Drawer>
+      )}
+
+      {drawer === 'settings' && !settingsLoading && (
         <SettingsDrawer
           selectedYear={acc.selectedYear}
           setSelectedYear={acc.setSelectedYear}
@@ -153,6 +164,7 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
         <YearEndModal
           year={acc.selectedYear}
           entries={acc.yearEntries}
+          yearIncome={acc.yearIncome}
           lastBackupAt={settings.lastBackupAt}
           onOpenEntry={id => { setModal(null); setDrawer(null); navigate(`/add?edit=${id}`) }}
           onOpenInvoices={() => { setModal(null); setDrawer(null); navigate('/fakturaer') }}

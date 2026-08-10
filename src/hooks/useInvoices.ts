@@ -11,7 +11,10 @@ export function useInvoices(user: User | null) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!user) return
+    // Uten bruker er det ingenting å vente på. Sto `loading` igjen som true,
+    // ville enhver skjerm som venter på den blitt stående på «Laster...» for
+    // alltid i stedet for å vise en tom liste.
+    if (!user) { setLoading(false); return }
     const q = query(collection(db, 'invoices'), where('userId', '==', user.uid))
     return onSnapshot(q, (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Invoice)
@@ -43,7 +46,7 @@ export function useCustomers(user: User | null) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!user) return
+    if (!user) { setLoading(false); return }
     const q = query(collection(db, 'customers'), where('userId', '==', user.uid))
     return onSnapshot(q, (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Customer)

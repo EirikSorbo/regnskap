@@ -1,21 +1,30 @@
 import { useAuth } from '../context/AuthContext'
 import { useInvoices } from '../hooks/useInvoices'
-import { type Entry, type ReceiptEntry, getImageUrls } from '../types'
-import { numberGaps, outstandingTotal } from '../lib/invoice'
+import { type Entry, type IncomeEntry } from '../types'
+import { yearEndChecks } from '../lib/year-end'
 import { kr, fmtDate } from '../lib/format'
 import { ModalShell } from './Modal'
 import { IconCheck } from './icons'
+
+/** «1 utgift», ikke «1 utgifter». */
+function antall(n: number, ental: string, flertall: string): string {
+  return `${n} ${n === 1 ? ental : flertall}`
+}
 
 /** Årsavslutning: er året klart til å leveres?
  *
  *  Skjermen finner ikke feil i regnskapet. Den ser etter det som pleier å bli
  *  glemt, altså bilag som mangler, fakturaer som henger igjen og en backup som
  *  aldri ble tatt. Alt den viser finnes fra før i årsrapporten eller i lista;
- *  poenget er å samle det på ett sted mens du står og skal levere. */
-export function YearEndModal({ year, entries, lastBackupAt, onOpenEntry, onOpenInvoices, onOpenBackup, onClose }: {
+ *  poenget er å samle det på ett sted mens du står og skal levere.
+ *
+ *  Selve reglene ligger i lib/year-end.ts og er testet der. Her tegnes bare
+ *  svaret. */
+export function YearEndModal({ year, entries, yearIncome, lastBackupAt, onOpenEntry, onOpenInvoices, onOpenBackup, onClose }: {
   year: number
   /** Årets oppføringer, uten de settings-styrte postene. */
   entries: Entry[]
+  yearIncome: IncomeEntry[]
   lastBackupAt?: number
   onOpenEntry: (id: string) => void
   onOpenInvoices: () => void
@@ -23,58 +32,52 @@ export function YearEndModal({ year, entries, lastBackupAt, onOpenEntry, onOpenI
   onClose: () => void
 }) {
   const { user } = useAuth()
-  const { invoices, loading } = useInvoices(user)
+  const { invoices, loading, error } = useInvoices(user)
 
-  // Kjøreturer har aldri vedlegg, så bare kvitteringer kan mangle et.
-  const missingAttachment = entries
-    .filter(e => e.entryType === 'receipt' && getImageUrls(e as ReceiptEntry).length === 0)
-
-  const yearInvoices = invoices.filter(i => i.issueDate?.startsWith(String(year)))
-  const drafts = yearInvoices.filter(i => i.status === 'kladd')
-  const outstanding = yearInvoices.filter(i => i.status === 'utstedt')
-  const outstandingSum = outstandingTotal(yearInvoices)
-
-  // Nummerrekka følger utstedelsesrekkefølgen, så hull vurderes innenfor året,
-  // slik årsrapporten også gjør det.
-  const gaps = numberGaps(yearInvoices
-    .filter(i => i.status !== 'kladd')
-    .map(i => i.number)
-    .filter((n): n is number => typeof n === 'number'))
+  const sjekk = yearEndChecks({ year, entries, yearIncome, invoices, lastBackupAt })
 
   return (
     <ModalShell title={`Årsavslutning ${year}`} onClose={onClose}>
       <div className="px-5 py-4 space-y-3">
+        {/* Uten denne ville en leseferil på fakturaene sett ut som et rent
+            regnskap: alle fakturasjekkene ville vist grønn hake. */}
+        {error && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            {error} Sjekkene som gjelder fakturaer er derfor ikke til å stole på.
+          </p>
+        )}
+
         {loading ? (
           <p className="text-sm text-slate-400 py-8 text-center">Laster...</p>
         ) : (
           <>
             <Check
               title="Kvitteringer uten vedlegg"
-              count={missingAttachment.length}
+              count={sjekk.missingAttachment.length}
               okText="Alle utgifter har bilag"
-              problemText={`${missingAttachment.length} utgifter mangler bilde av kvitteringen`}
+              problemText={`${antall(sjekk.missingAttachment.length, 'utgift mangler', 'utgifter mangler')} bilde av kvitteringen`}
             >
               <div className="space-y-1 pt-2">
-                {missingAttachment.slice(0, 8).map(e => (
+                {sjekk.missingAttachment.slice(0, 8).map(e => (
                   <button key={e.id} onClick={() => e.id && onOpenEntry(e.id)}
                     className="w-full text-left text-xs text-slate-600 hover:text-slate-900 hover:underline truncate">
                     {fmtDate(e.date, 'd. MMM')} · {e.description || e.category.label}
                   </button>
                 ))}
-                {missingAttachment.length > 8 && (
-                  <p className="text-xs text-slate-400">… og {missingAttachment.length - 8} til</p>
+                {sjekk.missingAttachment.length > 8 && (
+                  <p className="text-xs text-slate-400">… og {sjekk.missingAttachment.length - 8} til</p>
                 )}
               </div>
             </Check>
 
             <Check
               title="Kladder som aldri ble utstedt"
-              count={drafts.length}
+              count={sjekk.drafts.length}
               okText="Ingen kladder ligger igjen"
-              problemText={`${drafts.length} fakturaer står som kladd og er ikke bilag`}
+              problemText={`${antall(sjekk.drafts.length, 'faktura står', 'fakturaer står')} som kladd og er ikke bilag`}
             >
               <div className="space-y-1 pt-2">
-                {drafts.map(i => (
+                {sjekk.drafts.map(i => (
                   <p key={i.id} className="text-xs text-slate-600 truncate">
                     {fmtDate(i.issueDate, 'd. MMM')} · {i.customer.name} · {kr(i.total)}
                   </p>
@@ -87,29 +90,58 @@ export function YearEndModal({ year, entries, lastBackupAt, onOpenEntry, onOpenI
 
             <Check
               title="Hull i fakturanummerrekka"
-              count={gaps.length}
+              count={sjekk.gaps.length}
               okText="Rekka er sammenhengende"
-              problemText={`Nummer ${gaps.join(', ')} mangler i rekka`}
+              problemText={sjekk.gaps.length === 1
+                ? `Nummer ${sjekk.gaps[0]} mangler i rekka`
+                : `Numrene ${sjekk.gaps.join(', ')} mangler i rekka`}
             />
 
             <Check
               title="Utestående fakturaer"
-              count={outstanding.length}
+              count={sjekk.outstanding.length}
               okText="Alt fakturert er betalt"
-              problemText={`${outstanding.length} fakturaer venter på betaling, til sammen ${kr(outstandingSum)}`}
+              problemText={`${antall(sjekk.outstanding.length, 'faktura venter', 'fakturaer venter')} på betaling, til sammen ${kr(sjekk.outstandingSum)}`}
             >
               <button onClick={onOpenInvoices} className="text-xs text-blue-600 hover:underline pt-2">
                 Gå til fakturaene
               </button>
             </Check>
 
+            {/* Inntekt uten en faktura bak seg teller i resultatet, men står
+                ikke i fakturajournalen. Uten denne sjekken kan rapportens
+                inntekt være høyere enn journalen, uten at noe forklarer det. */}
+            <Check
+              title="Inntekt uten faktura"
+              count={sjekk.incomeWithoutInvoice.length}
+              okText="All inntekt kommer fra en faktura"
+              problemText={`${kr(sjekk.incomeWithoutInvoiceSum)} er ført som inntekt uten en faktura bak seg`}
+            >
+              <div className="space-y-1 pt-2">
+                {sjekk.incomeWithoutInvoice.slice(0, 8).map(i => (
+                  <p key={i.id} className="text-xs text-slate-600 truncate">
+                    {fmtDate(i.date, 'd. MMM')} · {kr(i.amount)}{i.description ? ` · ${i.description}` : ''}
+                  </p>
+                ))}
+                {sjekk.incomeWithoutInvoice.length > 8 && (
+                  <p className="text-xs text-slate-400">… og {sjekk.incomeWithoutInvoice.length - 8} til</p>
+                )}
+                <p className="text-xs text-slate-400 pt-1">
+                  Som regel inntekt ført før fakturamodulen fantes. Den teller i regnskapet,
+                  men har ikke noe bilag i appen.
+                </p>
+              </div>
+            </Check>
+
             <Check
               title="Backup"
-              count={backupMissing(lastBackupAt, year) ? 1 : 0}
+              count={sjekk.backupMissing ? 1 : 0}
               okText={`Sist tatt ${lastBackupAt ? fmtDate(new Date(lastBackupAt).toISOString().slice(0, 10)) : ''}`}
-              problemText={lastBackupAt
-                ? `Siste backup er fra ${fmtDate(new Date(lastBackupAt).toISOString().slice(0, 10))} og dekker ikke hele ${year}`
-                : 'Du har aldri tatt en full backup'}
+              problemText={!lastBackupAt
+                ? 'Du har aldri tatt en full backup'
+                : year < new Date().getFullYear()
+                  ? `Siste backup er fra ${fmtDate(new Date(lastBackupAt).toISOString().slice(0, 10))} og dekker ikke hele ${year}`
+                  : `Det er en stund siden sist, ${fmtDate(new Date(lastBackupAt).toISOString().slice(0, 10))}`}
             >
               <button onClick={onOpenBackup} className="text-xs text-blue-600 hover:underline pt-2">
                 Ta backup nå
@@ -120,15 +152,6 @@ export function YearEndModal({ year, entries, lastBackupAt, onOpenEntry, onOpenI
       </div>
     </ModalShell>
   )
-}
-
-/** En backup regnes som god nok når den er tatt etter at året var omme, for da
- *  inneholder den hele året. Står du i inneværende år, finnes ikke et slikt
- *  tidspunkt ennå, og vi ber i stedet om at det ikke er for lenge siden sist. */
-function backupMissing(lastBackupAt: number | undefined, year: number): boolean {
-  if (!lastBackupAt) return true
-  if (year < new Date().getFullYear()) return lastBackupAt < Date.UTC(year + 1, 0, 1)
-  return Date.now() - lastBackupAt > 30 * 24 * 60 * 60 * 1000
 }
 
 function Check({ title, count, okText, problemText, children }: {

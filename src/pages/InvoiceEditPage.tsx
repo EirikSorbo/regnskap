@@ -13,7 +13,6 @@ import {
 import { createDraft, updateDraft, issueInvoice } from '../lib/invoice-store'
 import { addCustomer } from '../lib/customers'
 import { krExact } from '../lib/format'
-import { AppHeader } from '../components/AppHeader'
 import { CustomerFields } from '../components/CustomerFields'
 import { IconArrowLeft, IconPlus, IconTrash } from '../components/icons'
 
@@ -112,9 +111,7 @@ export default function InvoiceEditPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
-      <AppHeader />
-
+    <>
       <div className="max-w-lg mx-auto px-4 pt-6 space-y-6">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/fakturaer')} title="Tilbake til fakturaene"
@@ -207,6 +204,6 @@ export default function InvoiceEditPage() {
           </button>
         </div>
       </div>
-    </div>
+    </>
   )
 }

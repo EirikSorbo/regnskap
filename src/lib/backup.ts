@@ -199,8 +199,9 @@ export interface ImportOptions {
 
 /** Skriver en innlest backup til Firestore.
  *
- *  «restore» sletter eksisterende dokumenter først, men rører ALDRI filene i
- *  Storage: de importerte kvitteringene beholder sine opprinnelige stier, så
+ *  «restore» skriver backupen først og fjerner deretter det den ikke inneholdt,
+ *  slik at et avbrudd underveis aldri kan etterlate et tomt regnskap. Den rører
+ *  ALDRI filene i Storage: de importerte kvitteringene beholder sine opprinnelige stier, så
  *  bildene overlever en gjenoppretting fra en backup som bare inneholdt JSON.
  *  Å slette dem her ga permanent bildetap. Filer fra en helt annen backup blir
  *  liggende som ufarlige foreldreløse objekter i stedet. */
@@ -211,21 +212,19 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   const COLLECTIONS = ['receipts', 'income', 'invoices', 'customers'] as const
   type CollectionName = typeof COLLECTIONS[number]
 
+  // Hva som ligger der fra før, per samling. Leses FØR vi skriver, men brukes
+  // ikke til å slette noe ennå: se rekkefølgen under.
   const existing = {} as Record<CollectionName, Set<string>>
   for (const name of COLLECTIONS) {
     const snap = await getDocs(query(collection(db, name), where('userId', '==', uid)))
-    if (mode === 'restore') {
-      onStatus('Sletter eksisterende data...')
-      for (const d of snap.docs) await deleteDoc(doc(db, name, d.id))
-      existing[name] = new Set<string>()
-    } else {
-      existing[name] = new Set(snap.docs.map((d) => d.id))
-    }
+    existing[name] = new Set(snap.docs.map((d) => d.id))
   }
 
   onStatus('Importerer...')
   let count = 0
   let skipped = 0
+  const written = {} as Record<CollectionName, Set<string>>
+  for (const name of COLLECTIONS) written[name] = new Set<string>()
 
   // Bevar dokument-id-en fra backupen (setDoc), så en ny import av samme fil ikke
   // lager duplikater — den id-baserte dedup-en treffer da faktisk. Oppføringer
@@ -234,9 +233,16 @@ export async function runImport(opts: ImportOptions): Promise<string> {
     for (const row of importableEntries(list, uid)) {
       const { id, ...fields } = row
       fields.userId = uid
-      if (id && existing[col].has(id)) { skipped++; continue }
-      if (id) await setDoc(doc(db, col, String(id)), fields)
-      else await addDoc(collection(db, col), fields)
+      // Ved sammenslåing hoppes eksisterende id-er over. Ved gjenoppretting
+      // skrives de over, for da er backupen fasit.
+      if (id && mode === 'merge' && existing[col].has(id)) { skipped++; continue }
+      if (id) {
+        await setDoc(doc(db, col, String(id)), fields)
+        written[col].add(String(id))
+      } else {
+        const ref = await addDoc(collection(db, col), fields)
+        written[col].add(ref.id)
+      }
       count++
     }
   }
@@ -244,6 +250,24 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   await writeAll(data.income ?? [], 'income')
   await writeAll(data.invoices ?? [], 'invoices')
   await writeAll(data.customers ?? [], 'customers')
+
+  // Gjenoppretting sletter FØRST NÅ, og bare det backupen ikke inneholdt.
+  //
+  // Før slettet den alt i starten og skrev etterpå. Ryk nettet i mellomtiden,
+  // sto du igjen med et tomt regnskap og en backup-fil som ennå ikke var
+  // skrevet. Nå er verste utfall at noe gammelt blir liggende igjen, og det
+  // kan ryddes; det motsatte kan ikke gjenskapes.
+  let removed = 0
+  if (mode === 'restore') {
+    onStatus('Fjerner det som ikke var med i backupen...')
+    for (const name of COLLECTIONS) {
+      for (const id of existing[name]) {
+        if (written[name].has(id)) continue
+        await deleteDoc(doc(db, name, id))
+        removed++
+      }
+    }
+  }
 
   let filesUploaded = 0
   let filesUnmatched = 0
@@ -286,6 +310,7 @@ export async function runImport(opts: ImportOptions): Promise<string> {
 
   const parts = [`${count} importert`]
   if (skipped > 0) parts.push(`${skipped} duplikater hoppet over`)
+  if (removed > 0) parts.push(`${removed} fjernet`)
   if (filesUploaded > 0) parts.push(`${filesUploaded} vedlegg lastet opp`)
   // Vedlegg som ikke lot seg plassere skal SIES fra om. Før ble de bare hoppet
   // over i stillhet, så en backup kunne se vellykket ut uten å ha ført bildene

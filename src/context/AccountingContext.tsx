@@ -21,6 +21,9 @@ interface AccountingContextType {
   entries: Entry[]
   incomeEntries: IncomeEntry[]
   loading: boolean
+  /** Tom når alt gikk bra. Er den satt, er tallene under ufullstendige, og det
+   *  MÅ vises på skjermen framfor å bli et stille galt resultat. */
+  error: string
   selectedYear: number
   setSelectedYear: (y: number) => void
   /** Årene brukeren har data i, nyeste først, alltid med de tre siste. */
@@ -46,7 +49,7 @@ const AccountingContext = createContext<AccountingContextType | null>(null)
 export function AccountingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const { settings } = useSettings()
-  const { entries, incomeEntries, loading } = useAccountingData(user)
+  const { entries, incomeEntries, loading, error } = useAccountingData(user)
 
   const [selectedYear, setSelectedYear] = useState(() =>
     parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
@@ -86,7 +89,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
       s + (e.entryType === 'receipt' ? getImageUrls(e as ReceiptEntry).length : 0), 0)
 
     return {
-      entries, incomeEntries, loading,
+      entries, incomeEntries, loading, error,
       selectedYear, setSelectedYear, years,
       categories, amountOf,
       yearEntries, yearIncome, groups,
@@ -94,7 +97,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
       trips, totalKm, attachmentCount,
       usedPosts: new Set(entries.map(e => e.category.post)),
     }
-  }, [entries, incomeEntries, loading, selectedYear, settings])
+  }, [entries, incomeEntries, loading, error, selectedYear, settings])
 
   return <AccountingContext.Provider value={value}>{children}</AccountingContext.Provider>
 }

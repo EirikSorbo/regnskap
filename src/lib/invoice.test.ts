@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  type Invoice, lineTotal, invoiceTotal, addDays, isOverdue, outstandingTotal,
+  type Invoice, lineTotal, invoiceTotal, addDays, isOverdue, outstandingTotal, outstandingInvoices,
   canEdit, canDelete, canCredit, statusLabel, validateForIssue,
   incomeAmount, incomeDescription, addressLines, numberGaps, invoiceFileName, toInvoiceCustomer,
 } from './invoice.ts'
@@ -47,6 +47,24 @@ test('isOverdue: bare utstedte fakturaer kan forfalle', () => {
 })
 
 // --- utestående ---
+
+// En utstedt kreditnota har status «utstedt», akkurat som en faktura som venter
+// på betaling. Uten kind-sjekken ble den talt som forfalt, mens summen holdt den
+// utenfor: «1 faktura venter på betaling, til sammen 0 kr».
+test('isOverdue: en kreditnota kan aldri forfalle', () => {
+  const kn = invoice({ kind: 'kreditnota', dueDate: '2026-03-15' })
+  assert.equal(isOverdue(kn, '2026-04-01'), false)
+})
+
+test('telling og summering av utestående følger samme regel', () => {
+  const list = [
+    invoice({ total: 5000 }),
+    invoice({ kind: 'kreditnota', total: 1000 }),
+    invoice({ status: 'betalt', total: 2000 }),
+  ]
+  assert.equal(outstandingInvoices(list).length, 1)
+  assert.equal(outstandingTotal(list), 5000)
+})
 
 test('outstandingTotal: teller kun utstedte fakturaer, ikke kladder eller betalte', () => {
   const list = [

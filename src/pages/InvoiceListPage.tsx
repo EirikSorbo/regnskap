@@ -6,7 +6,6 @@ import { useAccounting } from '../context/AccountingContext'
 import { useInvoices } from '../hooks/useInvoices'
 import { type Invoice, statusLabel, isOverdue, outstandingTotal } from '../lib/invoice'
 import { krExact, fmtDate } from '../lib/format'
-import { AppHeader } from '../components/AppHeader'
 import { CustomerRegisterModal } from '../components/CustomerRegisterModal'
 import { IconPlus } from '../components/icons'
 
@@ -41,9 +40,7 @@ export default function InvoiceListPage() {
   const overdueCount = yearInvoices.filter(i => isOverdue(i, today)).length
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
-      <AppHeader />
-
+    <>
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
         <h2 className="text-lg font-semibold text-slate-800">Fakturaer {year}</h2>
 
@@ -103,7 +100,7 @@ export default function InvoiceListPage() {
       </div>
 
       {showCustomers && <CustomerRegisterModal onClose={() => setShowCustomers(false)} />}
-    </div>
+    </>
   )
 }
 

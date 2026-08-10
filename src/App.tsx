@@ -5,6 +5,7 @@ import { SettingsProvider } from './context/SettingsContext'
 import { AccountingProvider } from './context/AccountingContext'
 import { PanelsProvider } from './context/PanelsContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { AppLayout } from './components/AppLayout'
 
 const RELOAD_KEY = 'chunk-reload'
 
@@ -66,13 +67,19 @@ export default function App() {
                 <Suspense fallback={<Loading />}>
                   <Routes>
                     <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-                    <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+
+                    {/* Sidene som deler topp. Toppen tegnes én gang, i AppLayout. */}
+                    <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
+                      <Route path="/" element={<DashboardPage />} />
+                      <Route path="/fakturaer" element={<InvoiceListPage />} />
+                      <Route path="/faktura/ny" element={<InvoiceEditPage />} />
+                      <Route path="/faktura/:id/rediger" element={<InvoiceEditPage />} />
+                    </Route>
+
+                    {/* Egen topp: skjemaflyt og de to utskriftsvisningene. */}
                     <Route path="/add" element={<PrivateRoute><AddReceiptPage /></PrivateRoute>} />
                     <Route path="/rapport" element={<PrivateRoute><ReportPage /></PrivateRoute>} />
-                    <Route path="/fakturaer" element={<PrivateRoute><InvoiceListPage /></PrivateRoute>} />
-                    <Route path="/faktura/ny" element={<PrivateRoute><InvoiceEditPage /></PrivateRoute>} />
                     <Route path="/faktura/:id" element={<PrivateRoute><InvoiceViewPage /></PrivateRoute>} />
-                    <Route path="/faktura/:id/rediger" element={<PrivateRoute><InvoiceEditPage /></PrivateRoute>} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Suspense>

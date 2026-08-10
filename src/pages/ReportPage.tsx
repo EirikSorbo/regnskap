@@ -1,19 +1,17 @@
-import { useState, useEffect } from 'react'
-import { collection, query, where, getDocs } from 'firebase/firestore'
-import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
+import { useAccounting } from '../context/AccountingContext'
+import { useInvoices } from '../hooks/useInvoices'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  type Entry, type ReceiptEntry, type DrivingEntry, type IncomeEntry,
+  type Entry, type ReceiptEntry, type DrivingEntry,
   CATEGORIES, SETTINGS_MANAGED_POSTS, entryAmount, calcEkom, postSums, getImagePaths,
 } from '../types'
-import { type Invoice, statusLabel, numberGaps } from '../lib/invoice'
+import { statusLabel } from '../lib/invoice'
+import { incomeWithoutInvoice, invoiceNumberGaps, sumIncome } from '../lib/year-end'
 import { kr2 as fmt, krInt as fmtInt, fmtDate, MONTHS, QUARTERS } from '../lib/format'
 import { IconArrowLeft, IconPrint } from '../components/icons'
 import { format } from 'date-fns'
-
-const YEAR_KEY = 'selected_year'
 
 /** Generate standardized attachment reference: Post XXXX – YYYY-MM-DD – NNN */
 function attachmentRef(post: string, date: string, index: number, ext: string) {
@@ -25,7 +23,12 @@ export default function ReportPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { settings } = useSettings()
-  const year = parseInt(searchParams.get('year') || localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear()))
+  // Regnskapet kommer fra den felles tilstanden, ikke fra en egen henting. Før
+  // hentet denne siden de samme dokumentene en gang til, og året ble lest rett
+  // fra localStorage: to kilder til de samme tallene, som kunne sprike.
+  const { entries, incomeEntries, loading: accLoading, error: accError, selectedYear } = useAccounting()
+  const { invoices, loading: invLoading, error: invError } = useInvoices(user)
+  const year = parseInt(searchParams.get('year') || String(selectedYear))
   const ys = String(year)
   const ratePerKm = settings.drivingRatePerKm
   const ratePerPassengerKm = settings.drivingRatePerPassengerKm
@@ -37,33 +40,8 @@ export default function ReportPage() {
   const { totalPhone, totalInternet, totalGross, deduction: ekomDeduction, net: ekomNet } =
     calcEkom(phoneMonths, internetQuarters, privateAmt)
 
-  const [entries, setEntries] = useState<Entry[]>([])
-  const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([])
-  const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (!user) return
-    Promise.all([
-      getDocs(query(collection(db, 'receipts'), where('userId', '==', user.uid))),
-      getDocs(query(collection(db, 'income'), where('userId', '==', user.uid))),
-      // Fakturajournalen er et tillegg til rapporten. Kan den ikke leses (for
-      // eksempel før de nye sikkerhetsreglene er publisert), skal resten av
-      // rapporten fortsatt komme opp — journalen utelates bare.
-      getDocs(query(collection(db, 'invoices'), where('userId', '==', user.uid)))
-        .catch(err => { console.warn('Fakturaer kunne ikke leses:', err); return null }),
-    ]).then(([receiptSnap, incomeSnap, invoiceSnap]) => {
-      setEntries(receiptSnap.docs.map(d => ({ id: d.id, ...d.data() } as Entry)))
-      setIncomeEntries(incomeSnap.docs.map(d => ({ id: d.id, ...d.data() } as IncomeEntry)))
-      setInvoices(invoiceSnap ? invoiceSnap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice)) : [])
-      setLoading(false)
-    }).catch(err => {
-      // Uten dette ble siden stående på «Laster rapport...» for alltid ved feil.
-      setError(err instanceof Error ? err.message : String(err))
-      setLoading(false)
-    })
-  }, [user])
+  const loading = accLoading || invLoading
+  const error = accError
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Laster rapport...</div>
@@ -91,8 +69,13 @@ export default function ReportPage() {
   const invoicedTotal = yearInvoices
     .filter(i => !i.historical)
     .reduce((s, i) => s + (i.kind === 'kreditnota' ? -i.total : i.total), 0)
-  const gapsInSeries = numberGaps(
-    yearInvoices.map(i => i.number).filter((n): n is number => typeof n === 'number'))
+  const gapsInSeries = invoiceNumberGaps(yearInvoices)
+
+  // Avstemming: inntekt som ikke har en faktura bak seg. Uten denne kunne
+  // rapportens inntekt være høyere enn fakturajournalens sum, uten at noe på
+  // arket forklarte forskjellen.
+  const utenFaktura = incomeWithoutInvoice(yearIncome)
+  const utenFakturaSum = sumIncome(utenFaktura)
 
   const getAmount = (entry: Entry) => entryAmount(entry, ratePerKm, ratePerPassengerKm)
 
@@ -187,6 +170,17 @@ export default function ReportPage() {
                       <td className="py-2 text-slate-700">Salgsinntekter</td>
                       <td className="py-2 text-right tabular-nums text-slate-500">{yearIncome.length}</td>
                       <td className="py-2 text-right tabular-nums font-medium text-green-700">{fmt(totalIncome)}</td>
+                    </tr>
+                  )}
+                  {/* Inntekt uten faktura bak seg står oppført for seg, slik at
+                      summen her og fakturajournalen nedenfor kan avstemmes mot
+                      hverandre uten å regne i hodet. */}
+                  {utenFakturaSum !== 0 && (
+                    <tr className="border-b border-slate-100">
+                      <td className="py-2"></td>
+                      <td className="py-2 text-slate-500 pl-4">herav uten faktura</td>
+                      <td className="py-2 text-right tabular-nums text-slate-500">{utenFaktura.length}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-500">{fmt(utenFakturaSum)}</td>
                     </tr>
                   )}
                   {postGroups.map(g => (
@@ -442,6 +436,14 @@ export default function ReportPage() {
           </div>
         )}
 
+        {/* Uten denne ser en journal som ikke lot seg lese helt lik ut som et år
+            uten fakturaer. */}
+        {invError && (
+          <p className="print:hidden max-w-4xl mx-auto text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 my-6">
+            {invError} Fakturajournalen mangler derfor i rapporten.
+          </p>
+        )}
+
         {/* === FAKTURAJOURNAL === */}
         {yearInvoices.length > 0 && (
           <div className="page-break-after">
@@ -483,6 +485,12 @@ export default function ReportPage() {
               {gapsInSeries.length > 0 && (
                 <p className="text-xs text-amber-700 mt-4">
                   Merk: nummerrekken har hull ved {gapsInSeries.join(', ')}. Fakturaer kan være utstedt i et annet år.
+                </p>
+              )}
+              {utenFakturaSum !== 0 && (
+                <p className="text-xs text-slate-500 mt-4">
+                  Avstemming: årets inntekt er {fmt(totalIncome)} kr, hvorav {fmt(invoicedTotal)} kr
+                  kommer fra fakturaene over og {fmt(utenFakturaSum)} kr er ført uten faktura.
                 </p>
               )}
               <p className="text-xs text-slate-300 mt-6">
