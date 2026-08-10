@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth'
 import { auth, googleProvider } from '../firebase'
+import { Logo } from '../components/Logo'
 
 /** Feilkoder der popup-innlogging ikke er farbar, og vi må sende brukeren
  *  gjennom en omdirigering i stedet. Det gjelder særlig appen kjørt fra
@@ -57,7 +58,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
         <div className="text-center mb-8">
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Sørbø Musikk" className="w-24 h-24 mx-auto mb-3 object-contain" />
+          {/* Samme logo som står i fakturahodet, så appen og bilagene som går
+              ut til kundene bruker ett og samme merke. */}
+          <Logo className="w-24 h-24 mx-auto mb-3 text-slate-700" />
           <h1 className="text-2xl font-bold text-slate-800">Sørbø Musikk</h1>
         </div>
 
