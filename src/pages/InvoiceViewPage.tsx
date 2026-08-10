@@ -141,7 +141,7 @@ export default function InvoiceViewPage() {
 
       {/* Selve fakturaen */}
       <div className="invoice-sheet max-w-3xl mx-auto px-8 py-10 print:px-0 print:py-0 print:max-w-none">
-        <div className="flex items-start justify-between border-t-4 border-slate-800 pt-6">
+        <div className="flex items-start justify-between border-t-4 border-slate-800 pt-10">
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-[0.2em]">{title}</p>
             <h1 className="text-3xl font-bold text-slate-800 mt-1">
@@ -154,7 +154,7 @@ export default function InvoiceViewPage() {
                 som navnet. Da havner logoen midt over «Sørbø Musikk», mens
                 kolonnen selv, og resten av linjene, forblir høyrejustert. */}
             <div className="inline-flex flex-col items-center">
-              <Logo className="w-12 h-12 text-slate-400 mb-2" />
+              <Logo className="w-16 h-16 text-slate-400 mb-2" />
               <p className="font-semibold text-slate-800">{company.name || 'Foretaksnavn mangler'}</p>
             </div>
             {company.address && <p>{company.address}</p>}
@@ -165,7 +165,7 @@ export default function InvoiceViewPage() {
           </div>
         </div>
 
-        <div className="mt-16 grid grid-cols-2 gap-8">
+        <div className="mt-20 grid grid-cols-2 gap-8">
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Faktureres til</p>
             <p className="text-sm font-semibold text-slate-800">{invoice.customer.name}</p>
@@ -180,7 +180,7 @@ export default function InvoiceViewPage() {
           </div>
         </div>
 
-        <table className="w-full text-sm mt-16">
+        <table className="w-full text-sm mt-20">
           <thead>
             <tr className="border-b-2 border-slate-200">
               <th className="text-left py-3 font-semibold text-slate-600">Beskrivelse</th>
