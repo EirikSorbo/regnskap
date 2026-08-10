@@ -11,6 +11,7 @@ import { ref, getBlob, uploadBytes } from 'firebase/storage'
 import { format } from 'date-fns'
 import { db, storage } from '../firebase'
 import { convertLegacySettings, type UserSettings } from '../context/SettingsContext'
+import { contentTypeFor } from './attachments'
 import { type Entry, type Category, entriesToCsv } from '../types'
 import {
   buildAttachmentMap, buildBackupData, backupFileName, importableEntries, findAttachmentPath,
@@ -281,7 +282,8 @@ export async function runImport(opts: ImportOptions): Promise<string> {
         // uten den blir filen liggende som «application/octet-stream». Da laster
         // nettleseren den ned i stedet for å vise den. Nettopp dette skjedde med
         // vedleggene som allerede lå der.
-        await uploadBytes(ref(storage, path), af.blob, { contentType: contentTypeFor(af.name) })
+        await uploadBytes(ref(storage, path), af.blob,
+          { contentType: contentTypeFor(af.name) ?? 'application/octet-stream' })
         filesUploaded++
       } catch (err) {
         console.warn('Vedlegg-feil:', af.name, err)
@@ -322,21 +324,6 @@ export async function runImport(opts: ImportOptions): Promise<string> {
   if (filesUnmatched > 0) parts.push(`${filesUnmatched} vedlegg uten treff (gammel backup uten vedleggsregister)`)
   if (mode === 'restore') parts.unshift('Gjenopprettet')
   return `✓ ${parts.join(', ')}.`
-}
-
-const MIME: Record<string, string> = {
-  pdf: 'application/pdf',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  heic: 'image/heic',
-  webp: 'image/webp',
-  gif: 'image/gif',
-}
-
-function contentTypeFor(filnavn: string): string {
-  const ext = filnavn.split('.').pop()?.toLowerCase() ?? ''
-  return MIME[ext] ?? 'application/octet-stream'
 }
 
 /** Teksten som vises når en fil er lest, men før brukeren har valgt

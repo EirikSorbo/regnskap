@@ -12,7 +12,7 @@
 //  mangler sti.
 // ---------------------------------------------------------------------------
 
-import { ref, getDownloadURL } from 'firebase/storage'
+import { ref, getDownloadURL, updateMetadata } from 'firebase/storage'
 import { storage } from '../firebase'
 
 export async function attachmentUrl(path: string): Promise<string> {
@@ -47,4 +47,51 @@ export function openAttachment(path?: string, fallbackUrl?: string): void {
       if (fallbackUrl) vis(fallbackUrl)
       else mislyktes()
     })
+}
+
+const MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  heic: 'image/heic',
+  webp: 'image/webp',
+  gif: 'image/gif',
+}
+
+/** Innholdstypen filnavnet tilsier, eller null hvis endelsen er ukjent. */
+export function contentTypeFor(path: string): string | null {
+  const ext = path.split('.').pop()?.toLowerCase() ?? ''
+  return MIME[ext] ?? null
+}
+
+/** Setter riktig innholdstype på vedlegg som allerede ligger i Storage.
+ *
+ *  Filer lastet opp uten innholdstype ble liggende som
+ *  «application/octet-stream». Nettleseren aner da ikke at det er en PDF eller
+ *  et bilde, og laster filen ned i stedet for å vise den.
+ *
+ *  Dette endrer BARE metadataen. Filen røres ikke, og nedlastingstokenet består,
+ *  i motsetning til en ny opplasting, som ville gitt filen et nytt token og
+ *  drept alle lagrede lenker. */
+export async function repairContentTypes(
+  paths: string[],
+  onProgress?: (ferdig: number, total: number) => void,
+): Promise<{ rettet: number; hoppetOver: number; feilet: number }> {
+  let rettet = 0, hoppetOver = 0, feilet = 0
+  let ferdig = 0
+  for (const path of paths) {
+    const contentType = contentTypeFor(path)
+    if (!contentType) { hoppetOver++; ferdig++; onProgress?.(ferdig, paths.length); continue }
+    try {
+      await updateMetadata(ref(storage, path), { contentType })
+      rettet++
+    } catch (err) {
+      console.warn('Kunne ikke rette innholdstype:', path, err)
+      feilet++
+    }
+    ferdig++
+    onProgress?.(ferdig, paths.length)
+  }
+  return { rettet, hoppetOver, feilet }
 }
