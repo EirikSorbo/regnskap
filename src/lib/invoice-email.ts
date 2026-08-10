@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Invoice } from './invoice.ts'
-import { kr, fmtDate } from './format.ts'
+import { krInt, fmtDate } from './format.ts'
 
 export const DEFAULT_SHORTCUT_NAME = 'Send faktura'
 
@@ -32,13 +32,23 @@ export function invoiceEmailSubject(
 export function invoiceEmailBody(
   inv: Pick<Invoice, 'kind' | 'number' | 'total' | 'dueDate'>,
   companyName?: string,
+  /** Navnet under «Vennlig hilsen». En e-post signeres av et menneske, ikke av
+   *  et foretak. Er det tomt, faller vi tilbake til foretaksnavnet. */
+  senderName?: string,
 ): string {
   const isCredit = inv.kind === 'kreditnota'
   const label = isCredit ? 'kreditnota' : 'faktura'
-  const nummer = inv.number ? ` ${inv.number}` : ''
+  const nummer = inv.number ? ` nr. ${inv.number}` : ''
+  const fra = companyName?.trim() ? ` fra ${companyName.trim()}` : ''
   const forfall = !isCredit && inv.dueDate ? `, med forfall ${fmtDate(inv.dueDate, 'd. MMMM yyyy')}` : ''
-  const hilsen = companyName?.trim() ? `\n\nVennlig hilsen\n${companyName.trim()}` : ''
-  return `Hei,\n\nVedlagt følger ${label}${nummer} på ${kr(inv.total)}${forfall}.${hilsen}`
+  // Takken hører hjemme på en faktura, ikke på en kreditnota: den retter opp
+  // noe som ble feil, og da faller den setningen underlig ut.
+  const takk = isCredit ? '' : '\n\nTakk for hyggelig oppdrag!'
+  const signatur = senderName?.trim() || companyName?.trim() || ''
+  const hilsen = signatur ? `\n\nVennlig hilsen\n${signatur}` : ''
+  // Beløpet i hele kroner: ørene sier ingenting i en e-post, og fakturaen
+  // under viser dem uansett.
+  return `Hei.\n\nVedlagt følger ${label}${nummer}${fra} på ${krInt(inv.total)} kr${forfall}.${takk}${hilsen}`
 }
 
 /** mailto-lenke. Mellomrom må bli %20 og ikke +, ellers viser noen e-postklienter

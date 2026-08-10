@@ -64,7 +64,7 @@ export default function InvoiceViewPage() {
           to, subject,
           fileName: `${invoiceFileName(inv, companyName)}.pdf`,
         })
-      : mailtoUrl({ to, subject, body: invoiceEmailBody(inv, companyName) })
+      : mailtoUrl({ to, subject, body: invoiceEmailBody(inv, companyName, settings.company?.contactName) })
   }
 
   async function run(fn: () => Promise<void>) {

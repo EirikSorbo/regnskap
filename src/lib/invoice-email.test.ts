@@ -16,17 +16,37 @@ test('invoiceEmailSubject: uten nummer og uten foretaksnavn', () => {
   assert.equal(invoiceEmailSubject({ kind: 'faktura', number: undefined }, ''), 'Faktura')
 })
 
-test('invoiceEmailBody: beløp og forfallsdato i teksten', () => {
-  const body = invoiceEmailBody(faktura, 'Sørbø Musikk')
-  assert.ok(body.includes('faktura 272'))
-  assert.ok(body.includes('23. august 2026'))
-  assert.ok(body.includes('Vennlig hilsen\nSørbø Musikk'))
+test('invoiceEmailBody: hele teksten, ord for ord', () => {
+  const body = invoiceEmailBody({ kind: 'faktura', number: 273, total: 2000, dueDate: '2026-08-24' },
+    'Sørbø Musikk', 'Eirik Sørbø')
+  assert.equal(body, [
+    'Hei.',
+    '',
+    `Vedlagt følger faktura nr. 273 fra Sørbø Musikk på ${(2000).toLocaleString('nb-NO')} kr, med forfall 24. august 2026.`,
+    '',
+    'Takk for hyggelig oppdrag!',
+    '',
+    'Vennlig hilsen',
+    'Eirik Sørbø',
+  ].join('\n'))
 })
 
-test('invoiceEmailBody: en kreditnota har ingen forfallsdato', () => {
-  const body = invoiceEmailBody(kreditnota, 'Sørbø Musikk')
-  assert.ok(body.includes('kreditnota 273'))
+test('invoiceEmailBody: beløpet er i hele kroner, uten ører', () => {
+  const body = invoiceEmailBody({ ...faktura, total: 13000.5 }, 'Sørbø Musikk', 'Eirik Sørbø')
+  assert.ok(body.includes(' kr,'))
+  assert.ok(!body.includes(',50'))
+})
+
+test('invoiceEmailBody: uten eget signaturnavn brukes foretaksnavnet', () => {
+  const body = invoiceEmailBody(faktura, 'Sørbø Musikk')
+  assert.ok(body.endsWith('Vennlig hilsen\nSørbø Musikk'))
+})
+
+test('invoiceEmailBody: en kreditnota har verken forfallsdato eller takk', () => {
+  const body = invoiceEmailBody(kreditnota, 'Sørbø Musikk', 'Eirik Sørbø')
+  assert.ok(body.includes('kreditnota nr. 273'))
   assert.ok(!body.includes('forfall'))
+  assert.ok(!body.includes('Takk for'))
 })
 
 test('mailtoUrl: mottaker, emne og tekst kodes riktig', () => {

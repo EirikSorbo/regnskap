@@ -40,6 +40,9 @@ export interface UserSettings {
  *  registrert i Merverdiavgiftsregisteret. */
 export interface CompanyInfo {
   name?: string
+  /** Navnet som signerer e-postene. Foretaket står som avsender på fakturaen,
+   *  men en e-post signeres av et menneske. */
+  contactName?: string
   address?: string
   postalCode?: string
   city?: string

@@ -52,6 +52,8 @@ export function CompanySection() {
     <div className="mt-2 space-y-2">
       <p className="text-xs text-slate-400">Dette står øverst på fakturaene dine.</p>
       <input value={draft.name ?? ''} onChange={e => set({ name: e.target.value })} placeholder="Foretaksnavn" className={inp} />
+      <input value={draft.contactName ?? ''} onChange={e => set({ contactName: e.target.value })}
+        placeholder="Ditt navn (signatur i e-post)" className={inp} />
       <input value={draft.orgNumber ?? ''} onChange={e => set({ orgNumber: e.target.value })} placeholder="Organisasjonsnummer" inputMode="numeric" className={inp} />
       <input value={draft.address ?? ''} onChange={e => set({ address: e.target.value })} placeholder="Adresse" className={inp} />
       <div className="flex gap-2">
