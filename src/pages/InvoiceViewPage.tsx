@@ -141,42 +141,49 @@ export default function InvoiceViewPage() {
 
       {/* Selve fakturaen */}
       <div className="invoice-sheet max-w-3xl mx-auto px-8 py-10 print:px-0 print:py-0 print:max-w-none">
-        <div className="flex items-start justify-between border-t-4 border-slate-800 pt-10">
+        {/* Toppen er én rutenettdel med to spalter, slik at kundenavnet og
+            foretaksnavnet står på samme høyde. De to har samme vekt og farge,
+            og skal leses som et par: hvem fakturaen er fra, og hvem den er til.
+            Marginene under er valgt for nettopp den høydematchen, målt i
+            nettleseren; endrer du logostørrelsen, må de justeres. */}
+        <div className="border-t-4 border-slate-800 pt-10 grid grid-cols-2 gap-8">
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-[0.2em]">{title}</p>
             <h1 className="text-3xl font-bold text-slate-800 mt-1">
               {invoice.number ? `${title} ${invoice.number}` : 'Uten nummer (kladd)'}
             </h1>
             <p className="text-sm text-slate-500 mt-1 print:hidden">Status: {statusLabel(invoice, today)}</p>
+
+            <div className="mt-8">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Faktureres til</p>
+              <p className="text-sm font-semibold text-slate-800">{invoice.customer.name}</p>
+              {addressLines(invoice.customer).map((l, i) => <p key={i} className="text-sm text-slate-600">{l}</p>)}
+              {invoice.customer.orgNumber && <p className="text-sm text-slate-500 mt-1">Org.nr. {invoice.customer.orgNumber}</p>}
+            </div>
           </div>
-          <div className="text-right text-sm text-slate-600">
+
+          <div>
             {/* Logoen og navnet står i en egen kolonne som blir akkurat så bred
                 som navnet. Da havner logoen midt over «Sørbø Musikk», mens
                 kolonnen selv, og resten av linjene, forblir høyrejustert. */}
-            <div className="inline-flex flex-col items-center">
-              <Logo className="w-16 h-16 text-slate-400 mb-2" />
-              <p className="font-semibold text-slate-800">{company.name || 'Foretaksnavn mangler'}</p>
+            <div className="text-right text-sm text-slate-600 mt-10">
+              <div className="inline-flex flex-col items-center">
+                <Logo className="w-16 h-16 text-slate-400 mb-2" />
+                <p className="font-semibold text-slate-800">{company.name || 'Foretaksnavn mangler'}</p>
+              </div>
+              {company.address && <p>{company.address}</p>}
+              {(company.postalCode || company.city) && <p>{[company.postalCode, company.city].filter(Boolean).join(' ')}</p>}
+              {company.orgNumber && <p className="mt-1">Org.nr. {company.orgNumber}</p>}
+              {company.email && <p>{company.email}</p>}
+              {company.phone && <p>{company.phone}</p>}
             </div>
-            {company.address && <p>{company.address}</p>}
-            {(company.postalCode || company.city) && <p>{[company.postalCode, company.city].filter(Boolean).join(' ')}</p>}
-            {company.orgNumber && <p className="mt-1">Org.nr. {company.orgNumber}</p>}
-            {company.email && <p>{company.email}</p>}
-            {company.phone && <p>{company.phone}</p>}
-          </div>
-        </div>
 
-        <div className="mt-20 grid grid-cols-2 gap-8">
-          <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Faktureres til</p>
-            <p className="text-sm font-semibold text-slate-800">{invoice.customer.name}</p>
-            {addressLines(invoice.customer).map((l, i) => <p key={i} className="text-sm text-slate-600">{l}</p>)}
-            {invoice.customer.orgNumber && <p className="text-sm text-slate-500 mt-1">Org.nr. {invoice.customer.orgNumber}</p>}
-          </div>
-          <div className="text-sm">
-            <Row label={isCredit ? 'Kreditnotadato' : 'Fakturadato'} value={fmtDate(invoice.issueDate, 'd. MMMM yyyy')} />
-            {!isCredit && <Row label="Forfallsdato" value={fmtDate(invoice.dueDate)} />}
-            {invoice.paidDate && <Row label="Betalt" value={fmtDate(invoice.paidDate)} />}
-            {company.bankAccount && <Row label="Kontonummer" value={company.bankAccount} />}
+            <div className="text-sm mt-10">
+              <Row label={isCredit ? 'Kreditnotadato' : 'Fakturadato'} value={fmtDate(invoice.issueDate, 'd. MMMM yyyy')} />
+              {!isCredit && <Row label="Forfallsdato" value={fmtDate(invoice.dueDate)} />}
+              {invoice.paidDate && <Row label="Betalt" value={fmtDate(invoice.paidDate)} />}
+              {company.bankAccount && <Row label="Kontonummer" value={company.bankAccount} />}
+            </div>
           </div>
         </div>
 
