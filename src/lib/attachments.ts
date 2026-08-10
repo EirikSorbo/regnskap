@@ -14,6 +14,7 @@
 
 import { ref, getDownloadURL, updateMetadata } from 'firebase/storage'
 import { storage } from '../firebase'
+import { contentTypeFor } from './mime'
 
 export async function attachmentUrl(path: string): Promise<string> {
   return getDownloadURL(ref(storage, path))
@@ -22,14 +23,18 @@ export async function attachmentUrl(path: string): Promise<string> {
 /** Åpner et vedlegg i en ny fane.
  *
  *  Fanen åpnes FØR lenken hentes. Safari blokkerer window.open som skjer etter
- *  en await, siden den da ikke lenger regnes som utløst av et trykk. */
+ *  en await, siden den da ikke lenger regnes som utløst av et trykk.
+ *
+ *  Blir fanen likevel blokkert, sier vi fra i stedet for å sende gjeldende
+ *  vindu til filen. Kjøres appen fra hjemskjermen, finnes det ingen adresselinje
+ *  og ingen tilbakeknapp der, og brukeren ville stått fast i en PDF. */
 export function openAttachment(path?: string, fallbackUrl?: string): void {
   const fane = window.open('', '_blank')
   if (fane) fane.opener = null
 
   const vis = (url: string) => {
     if (fane) fane.location.href = url
-    else window.location.href = url   // fane blokkert: bruk denne
+    else alert('Nettleseren blokkerte den nye fanen. Vedlegget vises fortsatt i appen.')
   }
   const mislyktes = () => {
     fane?.close()
@@ -47,22 +52,6 @@ export function openAttachment(path?: string, fallbackUrl?: string): void {
       if (fallbackUrl) vis(fallbackUrl)
       else mislyktes()
     })
-}
-
-const MIME: Record<string, string> = {
-  pdf: 'application/pdf',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  heic: 'image/heic',
-  webp: 'image/webp',
-  gif: 'image/gif',
-}
-
-/** Innholdstypen filnavnet tilsier, eller null hvis endelsen er ukjent. */
-export function contentTypeFor(path: string): string | null {
-  const ext = path.split('.').pop()?.toLowerCase() ?? ''
-  return MIME[ext] ?? null
 }
 
 /** Setter riktig innholdstype og «vis i nettleseren» på vedlegg som allerede

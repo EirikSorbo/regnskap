@@ -6,6 +6,7 @@ import { useSettings } from '../context/SettingsContext'
 import { usePanels } from '../context/PanelsContext'
 import { CATEGORIES, TAX_TERMS, calcEkom, taxPaidSummary } from '../types'
 import { kr } from '../lib/format'
+import { VERSION } from '../version'
 import { Drawer, Section } from './Modal'
 import { CategoryEditor } from './CategoryEditor'
 import { AssetEditor } from './AssetEditor'
@@ -104,7 +105,8 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, usedPosts
   }
 
   return (
-    <Drawer title="Innstillinger" onClose={onClose}>
+    <Drawer title="Innstillinger" onClose={onClose}
+      aside={<span className="text-xs text-slate-300">{VERSION}</span>}>
       <div>
         <label className="block text-sm font-semibold text-slate-700 mb-2">Regnskapsår</label>
         <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}

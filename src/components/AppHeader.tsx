@@ -2,8 +2,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { usePanels } from '../context/PanelsContext'
 import { IconGear, IconReport } from './icons'
 
-export const VERSION = 'v1.88'
-
 /** Toppen, lik på alle sidene den brukes: de to hovedfanene til venstre,
  *  rapportering og innstillinger som symboler til høyre.
  *
@@ -25,9 +23,9 @@ export function AppHeader() {
     <header className="bg-white border-b border-slate-200 px-4 pt-4">
       <div className="max-w-lg mx-auto">
         <div className="flex items-center justify-between">
-          <h1 className="text-base font-bold text-slate-800">
-            Sørbø Musikk <span className="text-xs font-normal text-slate-300 align-middle">{VERSION}</span>
-          </h1>
+          {/* Versjonsnummeret sto her før. Det hører hjemme i innstillingene,
+              sammen med det andre man sjelden trenger å se på. */}
+          <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
           <div className="flex items-center gap-1">
             <HeaderButton title="Rapportering" onClick={() => openPanel('overview')}><IconReport /></HeaderButton>
             <HeaderButton title="Innstillinger" onClick={() => openPanel('settings')}><IconGear /></HeaderButton>

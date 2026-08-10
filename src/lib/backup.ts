@@ -11,7 +11,7 @@ import { ref, getBlob, uploadBytes } from 'firebase/storage'
 import { format } from 'date-fns'
 import { db, storage } from '../firebase'
 import { convertLegacySettings, type UserSettings } from '../context/SettingsContext'
-import { contentTypeFor } from './attachments'
+import { contentTypeFor } from './mime'
 import { type Entry, type Category, entriesToCsv } from '../types'
 import {
   buildAttachmentMap, buildBackupData, backupFileName, importableEntries, findAttachmentPath,

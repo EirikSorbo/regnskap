@@ -32,9 +32,11 @@ export function ModalShell({ title, onClose, header, footer, overlayClass, child
 }
 
 /** Skuff som glir inn fra høyre. */
-export function Drawer({ title, onClose, contentClass = 'space-y-6', children }: {
+export function Drawer({ title, onClose, aside, contentClass = 'space-y-6', children }: {
   title: string
   onClose: () => void
+  /** Liten tekst i hodet, rett til venstre for lukkekrysset. */
+  aside?: ReactNode
   contentClass?: string
   children: ReactNode
 }) {
@@ -44,7 +46,10 @@ export function Drawer({ title, onClose, contentClass = 'space-y-6', children }:
       <div className="w-80 bg-white h-full shadow-2xl flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-slate-800">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
+          <div className="flex items-center gap-2">
+            {aside}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100"><IconX /></button>
+          </div>
         </div>
         <div className={`flex-1 overflow-y-auto px-5 py-5 ${contentClass}`}>{children}</div>
       </div>

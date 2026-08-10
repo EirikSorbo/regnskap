@@ -261,49 +261,6 @@ export function postSums(
   return groups
 }
 
-export function parseReceiptText(text: string): { amount?: number; date?: string } {
-  const out: { amount?: number; date?: string } = {}
-
-  // --- Dato ---
-  const ymd = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/)
-  const dmy = text.match(/\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})\b/)
-  if (ymd) {
-    out.date = `${ymd[1]}-${ymd[2]}-${ymd[3]}`
-  } else if (dmy) {
-    let y = dmy[3]
-    if (y.length === 2) y = (Number(y) > 70 ? '19' : '20') + y
-    const dd = dmy[1].padStart(2, '0'), mm = dmy[2].padStart(2, '0')
-    if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) out.date = `${y}-${mm}-${dd}`
-  }
-
-  // --- Beløp ---
-  const moneyRe = /\d{1,3}(?:[ .]\d{3})*[.,]\d{2}|\d+[.,]\d{2}/g
-  const parseNum = (raw: string): number | null => {
-    let s = raw.replace(/\s/g, '')
-    if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.') // 1.234,50
-    else if (s.includes(',')) s = s.replace(',', '.')                                  // 234,50
-    const n = parseFloat(s)
-    return Number.isFinite(n) ? n : null
-  }
-  const KEYWORDS = ['å betale', 'totalt', 'total', 'sum', 'beløp', 'to pay']
-  const keyworded: number[] = []
-  for (const line of text.split(/\r?\n/)) {
-    if (KEYWORDS.some((k) => line.toLowerCase().includes(k))) {
-      for (const t of line.match(moneyRe) || []) { const n = parseNum(t); if (n != null) keyworded.push(n) }
-    }
-  }
-  const pool = keyworded.length
-    ? keyworded
-    : (text.match(moneyRe) || []).map(parseNum).filter((n): n is number => n != null)
-  const candidate = pool.length ? Math.max(...pool) : undefined
-  if (candidate != null && candidate > 0) out.amount = Math.round(candidate * 100) / 100
-  return out
-}
-
-// ---------------------------------------------------------------------------
-//  DRIFTSMIDLER / SALDOAVSKRIVNING (post 6000)
-// ---------------------------------------------------------------------------
-
 export interface Asset {
   id: string
   name: string
