@@ -2,6 +2,8 @@ import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SettingsProvider } from './context/SettingsContext'
+import { AccountingProvider } from './context/AccountingContext'
+import { PanelsProvider } from './context/PanelsContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
 const RELOAD_KEY = 'chunk-reload'
@@ -57,19 +59,25 @@ export default function App() {
       <AuthProvider>
         <SettingsProvider>
           <BrowserRouter basename={import.meta.env.BASE_URL}>
-            <Suspense fallback={<Loading />}>
-              <Routes>
-                <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-                <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
-                <Route path="/add" element={<PrivateRoute><AddReceiptPage /></PrivateRoute>} />
-                <Route path="/rapport" element={<PrivateRoute><ReportPage /></PrivateRoute>} />
-                <Route path="/fakturaer" element={<PrivateRoute><InvoiceListPage /></PrivateRoute>} />
-                <Route path="/faktura/ny" element={<PrivateRoute><InvoiceEditPage /></PrivateRoute>} />
-                <Route path="/faktura/:id" element={<PrivateRoute><InvoiceViewPage /></PrivateRoute>} />
-                <Route path="/faktura/:id/rediger" element={<PrivateRoute><InvoiceEditPage /></PrivateRoute>} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
+            {/* Regnskapet og panelene ligger over rutene, ikke inni forsiden,
+                slik at samme topp kan åpne dem fra alle sidene. */}
+            <AccountingProvider>
+              <PanelsProvider>
+                <Suspense fallback={<Loading />}>
+                  <Routes>
+                    <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+                    <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+                    <Route path="/add" element={<PrivateRoute><AddReceiptPage /></PrivateRoute>} />
+                    <Route path="/rapport" element={<PrivateRoute><ReportPage /></PrivateRoute>} />
+                    <Route path="/fakturaer" element={<PrivateRoute><InvoiceListPage /></PrivateRoute>} />
+                    <Route path="/faktura/ny" element={<PrivateRoute><InvoiceEditPage /></PrivateRoute>} />
+                    <Route path="/faktura/:id" element={<PrivateRoute><InvoiceViewPage /></PrivateRoute>} />
+                    <Route path="/faktura/:id/rediger" element={<PrivateRoute><InvoiceEditPage /></PrivateRoute>} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Suspense>
+              </PanelsProvider>
+            </AccountingProvider>
           </BrowserRouter>
         </SettingsProvider>
       </AuthProvider>
