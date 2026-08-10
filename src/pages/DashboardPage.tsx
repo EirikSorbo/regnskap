@@ -24,7 +24,7 @@ import { YearChartModal } from '../components/YearChartModal'
 import { IconCar, IconGear, IconInvoice, IconOverview, IconPhone } from '../components/icons'
 
 const YEAR_KEY = 'selected_year'
-const VERSION = 'v1.62'
+const VERSION = 'v1.63'
 
 // De to lagene over forsiden. Erstatter sju uavhengige boolske flagg. Skuff og
 // modal er skilt fordi modalene åpnes OPPÅ oversiktsskuffen: lukker du modalen,

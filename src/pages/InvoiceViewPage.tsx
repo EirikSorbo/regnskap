@@ -149,7 +149,10 @@ export default function InvoiceViewPage() {
             </h1>
             <p className="text-sm text-slate-500 mt-1 print:hidden">Status: {statusLabel(invoice, today)}</p>
           </div>
-          <div className="text-right text-sm text-slate-600">
+          {/* Avsenderblokken er sentrert, ikke høyrestilt, nettopp for at logoen
+              skal stå midt over foretaksnavnet. */}
+          <div className="flex flex-col items-center text-center text-sm text-slate-600">
+            <Logo className="w-12 h-12 text-slate-400 mb-2" />
             <p className="font-semibold text-slate-800">{company.name || 'Foretaksnavn mangler'}</p>
             {company.address && <p>{company.address}</p>}
             {(company.postalCode || company.city) && <p>{[company.postalCode, company.city].filter(Boolean).join(' ')}</p>}
@@ -216,23 +219,13 @@ export default function InvoiceViewPage() {
               <p>Ved innsigelse vil kravet kunne bli sendt til forliksrådet, jf. tvistelovens § 5-2.</p>
             </div>
           )}
-          <div className="mt-3 pt-5 border-t border-slate-200 flex items-end justify-between gap-6">
-            {/* Foretaksnavnet står sentrert under logoen. Derfor bærer teksten til
-                høyre bare organisasjonsnummeret: ellers ville navnet stått to
-                ganger i samme bunnfelt. */}
-            <div className="flex flex-col items-center shrink-0">
-              <Logo className="w-12 h-12 text-slate-400" />
-              {company.name && (
-                <p className="text-[10px] text-slate-500 mt-1 text-center">{company.name}</p>
-              )}
-            </div>
-            <div className="text-xs text-slate-500 space-y-1 text-right">
-              {!isCredit && company.bankAccount && (
-                <p>Betales til konto {company.bankAccount} innen {fmtDate(invoice.dueDate)}.</p>
-              )}
-              {isCredit && invoice.creditsInvoiceId && <p>Denne kreditnotaen gjelder en tidligere utstedt faktura.</p>}
-              {company.orgNumber && <p>Org.nr. {company.orgNumber}</p>}
-            </div>
+          {/* Logo og foretaksnavn står i toppen nå, så bunnfeltet bærer bare
+              betalingsopplysningene. */}
+          <div className="mt-3 pt-5 border-t border-slate-200 text-xs text-slate-500 space-y-1 text-right">
+            {!isCredit && company.bankAccount && (
+              <p>Betales til konto {company.bankAccount} innen {fmtDate(invoice.dueDate)}.</p>
+            )}
+            {isCredit && invoice.creditsInvoiceId && <p>Denne kreditnotaen gjelder en tidligere utstedt faktura.</p>}
           </div>
         </div>
       </div>
