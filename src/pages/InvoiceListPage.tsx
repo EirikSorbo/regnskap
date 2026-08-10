@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 import { useInvoices } from '../hooks/useInvoices'
 import { type Invoice, statusLabel, isOverdue, outstandingTotal } from '../lib/invoice'
-import { kr, fmtDate } from '../lib/format'
+import { krExact, fmtDate } from '../lib/format'
 import { CustomerRegisterModal } from '../components/CustomerRegisterModal'
 import { InvoiceImportModal } from '../components/InvoiceImportModal'
 import { IconArrowLeft, IconPlus } from '../components/icons'
@@ -62,8 +62,8 @@ export default function InvoiceListPage() {
 
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
         <div className="grid grid-cols-3 gap-2">
-          <Kpi label="Fakturert" value={kr(invoiced)} />
-          <Kpi label="Utestående" value={kr(outstanding)} tone={outstanding > 0 ? 'text-amber-600' : undefined} />
+          <Kpi label="Fakturert" value={krExact(invoiced)} />
+          <Kpi label="Utestående" value={krExact(outstanding)} tone={outstanding > 0 ? 'text-amber-600' : undefined} />
           <Kpi label="Forfalt" value={String(overdueCount)} tone={overdueCount > 0 ? 'text-red-600' : undefined} />
         </div>
 
@@ -148,7 +148,7 @@ function InvoiceRow({ inv, today, onClick }: { inv: Invoice; today: string; onCl
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-sm font-semibold text-slate-800">{inv.kind === 'kreditnota' ? `−${kr(inv.total)}` : kr(inv.total)}</p>
+          <p className="text-sm font-semibold text-slate-800">{inv.kind === 'kreditnota' ? `−${krExact(inv.total)}` : krExact(inv.total)}</p>
           <span className={`inline-block mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${tone}`}>{label}</span>
         </div>
       </div>

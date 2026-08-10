@@ -9,7 +9,7 @@ import {
   type Invoice, lineTotal, addressLines, statusLabel, canEdit, canDelete, canCredit, invoiceFileName,
 } from '../lib/invoice'
 import { issueInvoice, markPaid, markUnpaid, deleteDraft, createCreditNote } from '../lib/invoice-store'
-import { kr, fmtDate } from '../lib/format'
+import { krExact, fmtDate } from '../lib/format'
 import {
   invoiceEmailSubject, invoiceEmailBody, mailtoUrl, shortcutUrl, DEFAULT_SHORTCUT_NAME,
 } from '../lib/invoice-email'
@@ -224,15 +224,15 @@ export default function InvoiceViewPage() {
               <tr key={i} className="border-b border-slate-100">
                 <td className="py-3 text-slate-700">{l.description}</td>
                 <td className="py-3 text-right tabular-nums text-slate-600">{l.quantity}</td>
-                <td className="py-3 text-right tabular-nums text-slate-600">{kr(l.unitPrice)}</td>
-                <td className="py-3 text-right tabular-nums font-medium text-slate-800">{kr(lineTotal(l))}</td>
+                <td className="py-3 text-right tabular-nums text-slate-600">{krExact(l.unitPrice)}</td>
+                <td className="py-3 text-right tabular-nums font-medium text-slate-800">{krExact(lineTotal(l))}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-slate-300">
               <td colSpan={3} className="py-4 font-semibold text-slate-600">{isCredit ? 'Å godskrive' : 'Å betale'}</td>
-              <td className="py-4 text-right tabular-nums font-bold text-slate-800 text-lg">{kr(invoice.total)}</td>
+              <td className="py-4 text-right tabular-nums font-bold text-slate-800 text-lg">{krExact(invoice.total)}</td>
             </tr>
           </tfoot>
         </table>

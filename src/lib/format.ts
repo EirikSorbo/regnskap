@@ -30,6 +30,20 @@ export function krInt(n: number): string {
   return n.toLocaleString('nb-NO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
+/** Kroner på fakturaer, der beløpene alltid er hele.
+ *
+ *  Viser ingen ører når beløpet er helt, men tar dem MED hvis de finnes.
+ *  Å runde av ville vært å oppgi et annet beløp enn det som faktisk kreves,
+ *  og en faktura er et betalingskrav. */
+export function krExact(n: number): string {
+  const helt = Math.round(n * 100) % 100 === 0
+  return n.toLocaleString('nb-NO', {
+    style: 'currency', currency: 'NOK',
+    minimumFractionDigits: helt ? 0 : 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 /** Tall uten valutasymbol, alltid to desimaler (rapportens beløpskolonner). */
 export function kr2(n: number): string {
   return n.toLocaleString('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

@@ -12,7 +12,7 @@ import {
 } from '../lib/invoice'
 import { createDraft, updateDraft, issueInvoice } from '../lib/invoice-store'
 import { addCustomer } from '../lib/customers'
-import { kr } from '../lib/format'
+import { krExact } from '../lib/format'
 import { CustomerFields } from '../components/CustomerFields'
 import { IconArrowLeft, IconPlus, IconTrash } from '../components/icons'
 
@@ -94,7 +94,7 @@ export default function InvoiceEditPage() {
   async function handleIssue() {
     if (!user) return
     if (problems.length > 0) { setError(problems.join(' ')); return }
-    if (!confirm(`Utsted fakturaen på ${kr(total)}?\n\nDen får et fakturanummer, kan ikke redigeres etterpå, og føres som inntekt på ${issueDate}.`)) return
+    if (!confirm(`Utsted fakturaen på ${krExact(total)}?\n\nDen får et fakturanummer, kan ikke redigeres etterpå, og føres som inntekt på ${issueDate}.`)) return
     setSaving(true); setError('')
     try {
       const invoiceId = await persist()
@@ -151,7 +151,7 @@ export default function InvoiceEditPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <label className="block text-xs text-slate-400 mb-0.5">Sum</label>
-                    <p className="text-sm font-semibold text-slate-800 py-2">{kr(lineTotal(l))}</p>
+                    <p className="text-sm font-semibold text-slate-800 py-2">{krExact(lineTotal(l))}</p>
                   </div>
                 </div>
               </div>
@@ -163,7 +163,7 @@ export default function InvoiceEditPage() {
           </button>
           <div className="flex justify-between items-baseline mt-3 pt-3 border-t border-slate-200">
             <span className="text-sm font-semibold text-slate-600">Total</span>
-            <span className="text-xl font-bold text-slate-800">{kr(total)}</span>
+            <span className="text-xl font-bold text-slate-800">{krExact(total)}</span>
           </div>
         </section>
 
