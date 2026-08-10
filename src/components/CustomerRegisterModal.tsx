@@ -2,46 +2,35 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useCustomers } from '../hooks/useInvoices'
 import { type Customer, type InvoiceCustomer, addressLines, toInvoiceCustomer } from '../lib/invoice'
-import { parseCustomerCsv, type ParsedCustomers } from '../lib/customers-csv'
-import { addCustomer, updateCustomer, deleteCustomer, importCustomers } from '../lib/customers'
+import { addCustomer, updateCustomer, deleteCustomer } from '../lib/customers'
 import { ModalShell } from './Modal'
 import { CustomerFields } from './CustomerFields'
-import { IconPencil, IconPlus, IconTrash, IconUpload } from './icons'
+import { IconPencil, IconPlus, IconTrash } from './icons'
 
-/** Kunderegisteret: liste, redigering og import fra CSV. */
+/** Kunderegisteret: liste og redigering. */
 export function CustomerRegisterModal({ onClose }: { onClose: () => void }) {
   const { user } = useAuth()
   const { customers, loading, error } = useCustomers(user)
   const [editing, setEditing] = useState<Customer | 'ny' | null>(null)
-  const [importing, setImporting] = useState(false)
 
   if (editing) {
     return <CustomerEditor customer={editing === 'ny' ? null : editing} onDone={() => setEditing(null)} onClose={onClose} />
-  }
-  if (importing) {
-    return <CustomerImport existing={customers} onDone={() => setImporting(false)} onClose={onClose} />
   }
 
   return (
     <ModalShell title="Kunderegister" onClose={onClose}>
       <div className="px-5 py-4 space-y-3">
-        <div className="flex gap-2">
-          <button onClick={() => setEditing('ny')}
-            className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2.5 rounded-lg transition">
-            <IconPlus /> Ny kunde
-          </button>
-          <button onClick={() => setImporting(true)}
-            className="flex-1 flex items-center justify-center gap-2 border border-slate-300 text-slate-700 text-sm font-medium py-2.5 rounded-lg hover:bg-slate-50 transition">
-            <IconUpload /> Importer CSV
-          </button>
-        </div>
+        <button onClick={() => setEditing('ny')}
+          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2.5 rounded-lg transition">
+          <IconPlus /> Ny kunde
+        </button>
 
         {error && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
 
         {loading ? (
           <p className="text-sm text-slate-400 py-8 text-center">Laster...</p>
         ) : customers.length === 0 ? (
-          <p className="text-sm text-slate-400 py-8 text-center">Ingen kunder ennå. Legg til én, eller importer fra det gamle systemet.</p>
+          <p className="text-sm text-slate-400 py-8 text-center">Ingen kunder ennå. Kunder havner også her når du skriver dem inn på en faktura.</p>
         ) : (
           <div className="space-y-1.5">
             <p className="text-xs text-slate-400">{customers.length} kunder</p>
@@ -105,109 +94,6 @@ function CustomerEditor({ customer, onDone, onClose }: {
       <div className="px-5 py-4 space-y-3">
         <CustomerFields value={value} onChange={setValue} customers={[]} saveToRegister={false} onToggleSave={() => {}} />
         {error && <p className="text-xs text-red-500">{error}</p>}
-      </div>
-    </ModalShell>
-  )
-}
-
-function CustomerImport({ existing, onDone, onClose }: {
-  existing: Customer[]
-  onDone: () => void
-  onClose: () => void
-}) {
-  const { user } = useAuth()
-  const [parsed, setParsed] = useState<ParsedCustomers | null>(null)
-  const [status, setStatus] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    setStatus('Leser fil...')
-    try {
-      const result = parseCustomerCsv(await file.text())
-      setParsed(result)
-      setStatus('')
-    } catch (err) {
-      setStatus('Feil: ' + (err instanceof Error ? err.message : String(err)))
-    }
-  }
-
-  async function execute() {
-    if (!user || !parsed) return
-    setBusy(true)
-    try {
-      const res = await importCustomers(user.uid, parsed.customers, existing,
-        (done, total) => setStatus(`Importerer ${done} av ${total} …`))
-      setStatus(`✓ ${res.added} kunder lagt inn${res.skipped > 0 ? `, ${res.skipped} fantes fra før` : ''}.`)
-      setParsed(null)
-    } catch (err) {
-      setStatus('Feil: ' + (err instanceof Error ? err.message : String(err)))
-    } finally { setBusy(false) }
-  }
-
-  const newCount = parsed
-    ? parsed.customers.filter(c => !existing.some(e =>
-        e.name.trim().toLowerCase() === c.name.trim().toLowerCase() && (e.postalCode ?? '') === (c.postalCode ?? ''))).length
-    : 0
-
-  return (
-    <ModalShell title="Importer kunder" onClose={onClose}
-      footer={
-        <div className="px-5 pb-5 pt-3 flex gap-2">
-          <button onClick={onDone} className="flex-1 border border-slate-300 text-slate-700 text-sm py-2.5 rounded-lg hover:bg-slate-50">Tilbake</button>
-          {parsed && (
-            <button onClick={execute} disabled={busy || newCount === 0}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold py-2.5 rounded-lg">
-              Importer {newCount} kunder
-            </button>
-          )}
-        </div>
-      }
-    >
-      <div className="px-5 py-4 space-y-3">
-        <p className="text-xs text-slate-500">
-          Velg en CSV-fil med kunder fra det gamle systemet. Importen legger bare inn kunder.
-          Den oppretter ingen fakturaer og fører ingen inntekt, så tallene i regnskapet er urørt.
-        </p>
-
-        <label className="w-full flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition cursor-pointer">
-          <IconUpload />
-          <span>Velg CSV-fil</span>
-          <input type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={handleFile} />
-        </label>
-
-        {status && (
-          <p className={`text-xs ${status.startsWith('✓') ? 'text-green-600' : status.startsWith('Feil') ? 'text-red-500' : 'text-slate-400'}`}>
-            {status}
-          </p>
-        )}
-
-        {parsed && (
-          <div className="space-y-2 border-t border-slate-100 pt-3">
-            <p className="text-sm text-slate-700">
-              <span className="font-semibold">{parsed.customers.length}</span> kunder i fila,
-              hvorav <span className="font-semibold">{newCount}</span> er nye.
-            </p>
-            {parsed.skippedRows > 0 && <p className="text-xs text-slate-400">{parsed.skippedRows} rader uten navn hoppes over.</p>}
-            {parsed.duplicateRows > 0 && <p className="text-xs text-slate-400">{parsed.duplicateRows} dubletter i fila slås sammen.</p>}
-            {parsed.ignoredColumns.length > 0 && (
-              <p className="text-xs text-slate-400">
-                Kolonner som ikke importeres: {parsed.ignoredColumns.join(', ')}.
-              </p>
-            )}
-            <div className="max-h-48 overflow-y-auto space-y-1 border border-slate-100 rounded-lg p-2">
-              {parsed.customers.slice(0, 20).map((c, i) => (
-                <div key={i} className="text-xs">
-                  <span className="text-slate-700">{c.name}</span>
-                  <span className="text-slate-400"> · {addressLines(c).join(', ') || 'ingen adresse'}</span>
-                </div>
-              ))}
-              {parsed.customers.length > 20 && <p className="text-xs text-slate-400">… og {parsed.customers.length - 20} til</p>}
-            </div>
-          </div>
-        )}
       </div>
     </ModalShell>
   )

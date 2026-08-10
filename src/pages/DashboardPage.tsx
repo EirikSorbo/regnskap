@@ -20,9 +20,9 @@ export default function DashboardPage() {
   // Regnskapet regnes ut i AccountingContext, og panelene bor i PanelsContext.
   // Forsiden er en av flere sider som viser dem, ikke eieren.
   const {
-    loading, selectedYear, yearEntries, totalIncome, totalExpenses, amountOf, trips, totalKm,
+    loading, selectedYear, yearEntries, totalIncome, totalExpenses, amountOf,
   } = useAccounting()
-  const { openPanel, busy, runFullBackup } = usePanels()
+  const { busy, runFullBackup } = usePanels()
 
   useMigrations(user, settings, updateSettings)
 
@@ -69,19 +69,6 @@ export default function DashboardPage() {
           <QuickAdd label="Kjøring" onClick={() => navigate('/add?type=driving')} />
           <QuickAdd label="Annet" primary onClick={() => navigate('/add')} />
         </div>
-
-        {/* Kjøreturene lå før bak et symbol i toppen. Toppen har nå bare
-            rapportering og innstillinger, så turlista hører hjemme her, i
-            regnskapsfanen, ved siden av snarveien som legger til en tur. */}
-        <button onClick={() => openPanel('driving')}
-          className="w-full flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm hover:bg-slate-50 transition">
-          <span className="text-sm font-medium text-slate-700">Kjøreturer {selectedYear}</span>
-          <span className="text-xs text-slate-400">
-            {trips.length === 0
-              ? 'Ingen turer ennå'
-              : `${trips.length} turer · ${totalKm.toLocaleString('nb-NO')} km`}
-          </span>
-        </button>
 
         {loading ? (
           <div className="text-center text-slate-400 py-12">Laster...</div>

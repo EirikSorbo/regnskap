@@ -8,7 +8,6 @@ import { type Invoice, statusLabel, isOverdue, outstandingTotal } from '../lib/i
 import { krExact, fmtDate } from '../lib/format'
 import { AppHeader } from '../components/AppHeader'
 import { CustomerRegisterModal } from '../components/CustomerRegisterModal'
-import { InvoiceImportModal } from '../components/InvoiceImportModal'
 import { IconPlus } from '../components/icons'
 
 type Filter = 'alle' | 'kladd' | 'utestående' | 'betalt'
@@ -17,19 +16,14 @@ export default function InvoiceListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { invoices, loading, error } = useInvoices(user)
-  // Året er felles for hele appen. Byttet du år her, gjelder det også
-  // regnskapsfanen, slik at de to fanene aldri viser hvert sitt år.
-  const { selectedYear: year, setSelectedYear: setYear, years: dataYears } = useAccounting()
+  // Regnskapsåret er felles for hele appen og velges i innstillingene, slik at
+  // de to fanene aldri kan vise hvert sitt år.
+  const { selectedYear: year } = useAccounting()
   const [filter, setFilter] = useState<Filter>('alle')
   const [showCustomers, setShowCustomers] = useState(false)
-  const [showImport, setShowImport] = useState(false)
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const yearInvoices = invoices.filter(i => i.issueDate.startsWith(String(year)))
-  const years = [...new Set([
-    ...dataYears,
-    ...invoices.map(i => parseInt(i.issueDate.slice(0, 4))),
-  ])].filter(Number.isFinite).sort((a, b) => b - a)
 
   const shown = yearInvoices.filter(i => {
     if (filter === 'kladd') return i.status === 'kladd'
@@ -51,13 +45,7 @@ export default function InvoiceListPage() {
       <AppHeader />
 
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-800">Fakturaer</h2>
-          <select value={year} onChange={e => setYear(Number(e.target.value))}
-            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
+        <h2 className="text-lg font-semibold text-slate-800">Fakturaer {year}</h2>
 
         <div className="grid grid-cols-3 gap-2">
           <Kpi label="Fakturert" value={krExact(invoiced)} />
@@ -73,10 +61,6 @@ export default function InvoiceListPage() {
           <button onClick={() => setShowCustomers(true)}
             className="flex-1 basis-0 min-w-0 bg-white border border-slate-200 rounded-xl py-3 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
             Kunderegister
-          </button>
-          <button onClick={() => setShowImport(true)}
-            className="flex-1 basis-0 min-w-0 bg-white border border-slate-200 rounded-xl py-3 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition">
-            Importer
           </button>
         </div>
 
@@ -104,11 +88,11 @@ export default function InvoiceListPage() {
                 fakturaer eller bare har valgt feil år. */}
             {yearInvoices.length === 0 && invoices.length > 0 && (
               <p className="text-xs">
-                Du har {invoices.length} fakturaer i andre år. Bytt år øverst i lista.
+                Du har {invoices.length} fakturaer i andre år. Bytt regnskapsår i innstillingene.
               </p>
             )}
             {invoices.length === 0 && !error && (
-              <p className="text-xs">Lag en ny faktura, eller importer fra det gamle systemet.</p>
+              <p className="text-xs">Lag en ny faktura for å komme i gang.</p>
             )}
           </div>
         ) : (
@@ -119,7 +103,6 @@ export default function InvoiceListPage() {
       </div>
 
       {showCustomers && <CustomerRegisterModal onClose={() => setShowCustomers(false)} />}
-      {showImport && <InvoiceImportModal existing={invoices} onClose={() => setShowImport(false)} />}
     </div>
   )
 }

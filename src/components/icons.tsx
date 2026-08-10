@@ -37,27 +37,13 @@ export function IconOverview() {
 }
 
 /** Rapportering: søyler som stiger. Bevisst ulikt IconOverview, som er en
- *  skriveplate, og IconInvoice, som er et dokument. */
+ *  skriveplate og brukes til oversikten inne i rapporteringsskuffen. */
 export function IconReport() {
   return <svg {...stroke} className="w-5 h-5" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20h16M7 20v-5m5 5V9m5 11V5" /></svg>
 }
 
 export function IconUpload() {
   return <svg {...stroke} className="w-4 h-4" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-}
-
-export function IconPhone() {
-  return <svg {...stroke} className="w-5 h-5" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-}
-
-export function IconCar() {
-  return <svg {...stroke} className="w-5 h-5" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M13 16H11V6l-4 1-2 4H3a1 1 0 00-1 1v2a1 1 0 001 1h1m9-9h4l2 4h1a1 1 0 011 1v2a1 1 0 01-1 1h-1m-9 0h4" /></svg>
-}
-
-/** Faktura: et dokument med linjer. Bevisst ulikt IconOverview, som er en
- *  skriveplate og brukes til oversikten. */
-export function IconInvoice() {
-  return <svg {...stroke} className="w-5 h-5" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /><path strokeLinecap="round" strokeLinejoin="round" d="M13 3v5a1 1 0 001 1h5" /></svg>
 }
 
 export function IconPaperclip() {

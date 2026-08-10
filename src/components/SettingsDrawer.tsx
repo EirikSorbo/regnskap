@@ -1,29 +1,27 @@
 import { useState, useEffect } from 'react'
 import { signOut } from 'firebase/auth'
-import { format } from 'date-fns'
 import { auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { usePanels } from '../context/PanelsContext'
-import { type IncomeEntry, CATEGORIES, calcEkom } from '../types'
-import { addIncome, deleteIncome } from '../lib/entries'
-import { kr, fmtDate } from '../lib/format'
+import { CATEGORIES, calcEkom } from '../types'
+import { kr } from '../lib/format'
 import { Drawer, Section } from './Modal'
 import { CategoryEditor } from './CategoryEditor'
 import { AssetEditor } from './AssetEditor'
 import { CompanySection } from './CompanySection'
-import { IconTrash } from './icons'
 
 const inputClass = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const numberClass = `${inputClass} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`
 
-/** Innstillingsskuffen. Eier sin egen skjemastate og skriver selv til Firestore;
- *  dashbordet trenger bare å si hvilket år som er valgt. */
-export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncome, usedPosts, onClose }: {
+/** Innstillingsskuffen. Eier sin egen skjemastate og skriver selv til Firestore.
+ *
+ *  Regnskapsåret velges her, og gjelder hele appen: både regnskapsfanen og
+ *  fakturafanen viser det året som står øverst i denne skuffen. */
+export function SettingsDrawer({ selectedYear, setSelectedYear, years, usedPosts, onClose }: {
   selectedYear: number
   setSelectedYear: (y: number) => void
   years: number[]
-  yearIncome: IncomeEntry[]
   usedPosts: Set<string>
   onClose: () => void
 }) {
@@ -45,10 +43,6 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
   const [ratePerKm, setRatePerKm] = useState(settings.drivingRatePerKm)
   const [ratePerPassengerKm, setRatePerPassengerKm] = useState(settings.drivingRatePerPassengerKm)
 
-  const [incomeAmount, setIncomeAmount] = useState('')
-  const [incomeDate, setIncomeDate] = useState(`${selectedYear}-${format(new Date(), 'MM-dd')}`)
-  const [savingIncome, setSavingIncome] = useState(false)
-
   const [hjemmekontorAmt, setHjemmekontorAmt] = useState('')
   const [savingHjemmekontor, setSavingHjemmekontor] = useState(false)
   const [avskrivningerAmt, setAvskrivningerAmt] = useState('')
@@ -58,37 +52,7 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
   useEffect(() => {
     setHjemmekontorAmt(String(settings.hjemmekontorAmounts[ys] || ''))
     setAvskrivningerAmt(String(settings.avskrivningerAmounts[ys] || ''))
-    setIncomeDate(`${selectedYear}-${format(new Date(), 'MM-dd')}`)
-  }, [selectedYear, ys, settings.hjemmekontorAmounts, settings.avskrivningerAmounts])
-
-  const totalIncome = yearIncome.reduce((s, e) => s + e.amount, 0)
-
-  async function handleAddIncome(e: React.FormEvent) {
-    e.preventDefault()
-    if (!user || !incomeAmount) return
-    setSavingIncome(true)
-    try {
-      await addIncome(user.uid, { amount: parseFloat(incomeAmount), date: incomeDate })
-      setIncomeAmount('')
-      setIncomeDate(`${selectedYear}-${format(new Date(), 'MM-dd')}`)
-    } catch (err) {
-      alert('Kunne ikke lagre inntekten: ' + (err instanceof Error ? err.message : String(err)))
-    } finally {
-      setSavingIncome(false)
-    }
-  }
-
-  async function handleDeleteIncome(entry: IncomeEntry) {
-    if (!entry.id) return
-    // Inntekt som kommer fra en utstedt faktura eies av fakturaen. Slettes den
-    // her, står fakturaen igjen som utstedt uten å være ført noe sted.
-    if (entry.invoiceId) {
-      alert('Denne inntekten hører til en utstedt faktura og kan ikke slettes her.\n\nSkal beløpet reverseres, lager du en kreditnota på fakturaen.')
-      return
-    }
-    if (!confirm('Slett inntekt?')) return
-    try { await deleteIncome(entry.id) } catch (e) { console.error(e) }
-  }
+  }, [ys, settings.hjemmekontorAmounts, settings.avskrivningerAmounts])
 
   /** Satsene skrives rett til innstillingene når brukeren endrer dem. Dette lå
    *  før i to effekter som speilet state begge veier og måtte holdes utenfor
@@ -125,38 +89,6 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
           {years.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
-
-      <Section title="Inntekter" open={!!open.income} onToggle={() => toggle('income')}
-        summary={totalIncome > 0 ? <span>{kr(totalIncome)}</span> : null}>
-        <div className="space-y-2 mt-2">
-          <p className="text-xs text-slate-400 mb-1">Inntekter registreres på post 3000</p>
-          <form onSubmit={handleAddIncome} className="space-y-2">
-            <div className="flex gap-2">
-              <input type="number" value={incomeAmount} onChange={e => setIncomeAmount(e.target.value)}
-                inputMode="decimal" min="0" step="0.01" placeholder="Beløp" required className={`flex-1 ${numberClass}`} />
-              <button type="submit" disabled={savingIncome}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm px-3 py-2 rounded-lg transition whitespace-nowrap">
-                Legg til
-              </button>
-            </div>
-            <input type="date" value={incomeDate} onChange={e => setIncomeDate(e.target.value)} className={inputClass} />
-          </form>
-          {yearIncome.length > 0 && (
-            <div className="space-y-1 pt-1 border-t border-slate-100">
-              {yearIncome.map(inc => (
-                <div key={inc.id} className="flex items-center justify-between text-xs py-1">
-                  <div className="text-slate-600 flex-1 min-w-0">
-                    <span className="font-medium">{kr(inc.amount)}</span>
-                    <span className="text-slate-300 ml-1">{fmtDate(inc.date, 'd. MMM')}</span>
-                  </div>
-                  <button onClick={() => handleDeleteIncome(inc)} className="text-slate-300 hover:text-red-400 ml-2 shrink-0"><IconTrash /></button>
-                </div>
-              ))}
-              <p className="text-xs font-semibold text-slate-700 pt-1 border-t border-slate-100">Total: {kr(totalIncome)}</p>
-            </div>
-          )}
-        </div>
-      </Section>
 
       <Section title="Kjøresatser" open={!!open.driving} onToggle={() => toggle('driving')}
         summary={<span>{ratePerKm.toFixed(2)} kr/km</span>}>

@@ -3,14 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { useSettings } from './SettingsContext'
 import { useAccounting } from './AccountingContext'
-import { type Entry, SETTINGS_MANAGED_POSTS } from '../types'
-import { deleteEntry } from '../lib/entries'
+import { SETTINGS_MANAGED_POSTS } from '../types'
 import { downloadJsonBackup, downloadAttachmentZip, downloadFullBackup, downloadCsv } from '../lib/backup'
 import { SettingsDrawer } from '../components/SettingsDrawer'
 import { OverviewDrawer } from '../components/OverviewDrawer'
 import { BackupModal } from '../components/BackupModal'
 import { EkomModal } from '../components/EkomModal'
-import { DrivingModal } from '../components/DrivingModal'
 import { ResultModal } from '../components/ResultModal'
 import { ReceiptListModal } from '../components/ReceiptListModal'
 import { YearChartModal } from '../components/YearChartModal'
@@ -25,7 +23,7 @@ import { YearChartModal } from '../components/YearChartModal'
  *  oversiktsskuffen: lukker du modalen, skal du tilbake til skuffen, ikke helt
  *  ut. */
 type DrawerName = 'settings' | 'overview'
-type ModalName = 'ekom' | 'driving' | 'result' | 'receipts' | 'backup' | 'chart'
+type ModalName = 'ekom' | 'result' | 'receipts' | 'backup' | 'chart'
 export type PanelName = DrawerName | ModalName
 
 interface PanelsContextType {
@@ -52,11 +50,6 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
   const openPanel = (name: PanelName) => {
     if (DRAWERS.includes(name)) setDrawer(name as DrawerName)
     else setModal(name as ModalName)
-  }
-
-  async function handleDelete(entry: Entry) {
-    if (!confirm('Slett denne oppføringen?')) return
-    try { await deleteEntry(entry) } catch (e) { console.error(e) }
   }
 
   /** Kjører en nedlasting med opptatt-flagg og én felles feilmelding, slik at en
@@ -102,7 +95,6 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
           selectedYear={acc.selectedYear}
           setSelectedYear={acc.setSelectedYear}
           years={acc.years}
-          yearIncome={acc.yearIncome}
           usedPosts={acc.usedPosts}
           onClose={() => setDrawer(null)}
         />
@@ -133,18 +125,6 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
           onZip={handleZip}
           onFullBackup={handleFullBackup}
           onCsv={handleCsv}
-          onClose={() => setModal(null)}
-        />
-      )}
-
-      {modal === 'driving' && (
-        <DrivingModal
-          year={acc.selectedYear}
-          entries={acc.yearEntries}
-          getAmount={acc.amountOf}
-          onAdd={() => { setModal(null); navigate('/add?type=driving') }}
-          onEdit={d => { setModal(null); navigate(`/add?edit=${d.id}`) }}
-          onDelete={handleDelete}
           onClose={() => setModal(null)}
         />
       )}
