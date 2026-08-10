@@ -36,6 +36,12 @@ export function IconOverview() {
   return <svg {...stroke} className="w-5 h-5" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
 }
 
+/** Rapportering: søyler som stiger. Bevisst ulikt IconOverview, som er en
+ *  skriveplate, og IconInvoice, som er et dokument. */
+export function IconReport() {
+  return <svg {...stroke} className="w-5 h-5" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20h16M7 20v-5m5 5V9m5 11V5" /></svg>
+}
+
 export function IconUpload() {
   return <svg {...stroke} className="w-4 h-4" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
 }

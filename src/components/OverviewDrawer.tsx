@@ -59,7 +59,7 @@ export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, on
   }
 
   return (
-    <Drawer title="Oversikt" onClose={close} contentClass="space-y-4">
+    <Drawer title="Rapportering" onClose={close} contentClass="space-y-4">
       <button onClick={onOpenResult}
         className="w-full flex items-center justify-between text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl px-4 py-3 transition">
         <span>Oversikt {selectedYear}</span>

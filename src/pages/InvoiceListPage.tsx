@@ -2,21 +2,24 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
+import { useAccounting } from '../context/AccountingContext'
 import { useInvoices } from '../hooks/useInvoices'
 import { type Invoice, statusLabel, isOverdue, outstandingTotal } from '../lib/invoice'
 import { krExact, fmtDate } from '../lib/format'
+import { AppHeader } from '../components/AppHeader'
 import { CustomerRegisterModal } from '../components/CustomerRegisterModal'
 import { InvoiceImportModal } from '../components/InvoiceImportModal'
-import { IconArrowLeft, IconPlus } from '../components/icons'
+import { IconPlus } from '../components/icons'
 
-const YEAR_KEY = 'selected_year'
 type Filter = 'alle' | 'kladd' | 'utestående' | 'betalt'
 
 export default function InvoiceListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { invoices, loading, error } = useInvoices(user)
-  const [year, setYear] = useState(() => parseInt(localStorage.getItem(YEAR_KEY) || String(new Date().getFullYear())))
+  // Året er felles for hele appen. Byttet du år her, gjelder det også
+  // regnskapsfanen, slik at de to fanene aldri viser hvert sitt år.
+  const { selectedYear: year, setSelectedYear: setYear, years: dataYears } = useAccounting()
   const [filter, setFilter] = useState<Filter>('alle')
   const [showCustomers, setShowCustomers] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -24,8 +27,8 @@ export default function InvoiceListPage() {
 
   const yearInvoices = invoices.filter(i => i.issueDate.startsWith(String(year)))
   const years = [...new Set([
+    ...dataYears,
     ...invoices.map(i => parseInt(i.issueDate.slice(0, 4))),
-    new Date().getFullYear(), year,
   ])].filter(Number.isFinite).sort((a, b) => b - a)
 
   const shown = yearInvoices.filter(i => {
@@ -45,22 +48,17 @@ export default function InvoiceListPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      <header className="bg-white border-b border-slate-200 px-4 py-4">
-        <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => navigate('/')} className="text-slate-500 hover:text-slate-800 p-1 rounded-lg hover:bg-slate-100 transition">
-              <IconArrowLeft />
-            </button>
-            <h1 className="text-lg font-semibold text-slate-800">Fakturaer</h1>
-          </div>
+      <AppHeader />
+
+      <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-800">Fakturaer</h2>
           <select value={year} onChange={e => setYear(Number(e.target.value))}
             className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
-      </header>
 
-      <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
         <div className="grid grid-cols-3 gap-2">
           <Kpi label="Fakturert" value={krExact(invoiced)} />
           <Kpi label="Utestående" value={krExact(outstanding)} tone={outstanding > 0 ? 'text-amber-600' : undefined} />
@@ -106,7 +104,7 @@ export default function InvoiceListPage() {
                 fakturaer eller bare har valgt feil år. */}
             {yearInvoices.length === 0 && invoices.length > 0 && (
               <p className="text-xs">
-                Du har {invoices.length} fakturaer i andre år. Bytt år øverst til høyre.
+                Du har {invoices.length} fakturaer i andre år. Bytt år øverst i lista.
               </p>
             )}
             {invoices.length === 0 && !error && (

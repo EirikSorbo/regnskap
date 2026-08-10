@@ -10,9 +10,7 @@ import { deleteEntry } from '../lib/entries'
 import { kr } from '../lib/format'
 import { EntryList } from '../components/EntryList'
 import { BackupReminder } from '../components/BackupReminder'
-import { IconCar, IconGear, IconInvoice, IconOverview, IconPhone } from '../components/icons'
-
-const VERSION = 'v1.73'
+import { AppHeader } from '../components/AppHeader'
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -22,7 +20,7 @@ export default function DashboardPage() {
   // Regnskapet regnes ut i AccountingContext, og panelene bor i PanelsContext.
   // Forsiden er en av flere sider som viser dem, ikke eieren.
   const {
-    loading, selectedYear, yearEntries, totalIncome, totalExpenses, amountOf,
+    loading, selectedYear, yearEntries, totalIncome, totalExpenses, amountOf, trips, totalKm,
   } = useAccounting()
   const { openPanel, busy, runFullBackup } = usePanels()
 
@@ -38,23 +36,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      <header className="bg-white border-b border-slate-200 px-4 py-4">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-bold text-slate-800">Sørbø Musikk</h1>
-            {/* Hvem du er logget inn som står i innstillingene, rett over «Logg
-                ut». Her holder versjonen. */}
-            <p className="text-xs text-slate-300">{VERSION}</p>
-          </div>
-          <div className="flex items-center gap-1">
-            <HeaderButton title="Fakturaer" onClick={() => navigate('/fakturaer')}><IconInvoice /></HeaderButton>
-            <HeaderButton title="Kjøring" onClick={() => openPanel('driving')}><IconCar /></HeaderButton>
-            <HeaderButton title="EKOM-kalkulator" onClick={() => openPanel('ekom')}><IconPhone /></HeaderButton>
-            <HeaderButton title="Oversikt" onClick={() => openPanel('overview')}><IconOverview /></HeaderButton>
-            <HeaderButton title="Innstillinger" onClick={() => openPanel('settings')}><IconGear /></HeaderButton>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <div className="max-w-lg mx-auto px-4 pt-5 space-y-5">
 
@@ -88,6 +70,19 @@ export default function DashboardPage() {
           <QuickAdd label="Annet" primary onClick={() => navigate('/add')} />
         </div>
 
+        {/* Kjøreturene lå før bak et symbol i toppen. Toppen har nå bare
+            rapportering og innstillinger, så turlista hører hjemme her, i
+            regnskapsfanen, ved siden av snarveien som legger til en tur. */}
+        <button onClick={() => openPanel('driving')}
+          className="w-full flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm hover:bg-slate-50 transition">
+          <span className="text-sm font-medium text-slate-700">Kjøreturer {selectedYear}</span>
+          <span className="text-xs text-slate-400">
+            {trips.length === 0
+              ? 'Ingen turer ennå'
+              : `${trips.length} turer · ${totalKm.toLocaleString('nb-NO')} km`}
+          </span>
+        </button>
+
         {loading ? (
           <div className="text-center text-slate-400 py-12">Laster...</div>
         ) : (
@@ -104,15 +99,6 @@ export default function DashboardPage() {
         )}
       </div>
     </div>
-  )
-}
-
-function HeaderButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} title={title}
-      className="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition">
-      {children}
-    </button>
   )
 }
 

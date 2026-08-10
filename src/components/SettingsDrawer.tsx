@@ -4,7 +4,8 @@ import { format } from 'date-fns'
 import { auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
-import { type IncomeEntry, CATEGORIES } from '../types'
+import { usePanels } from '../context/PanelsContext'
+import { type IncomeEntry, CATEGORIES, calcEkom } from '../types'
 import { addIncome, deleteIncome } from '../lib/entries'
 import { kr, fmtDate } from '../lib/format'
 import { Drawer, Section } from './Modal'
@@ -28,7 +29,14 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
 }) {
   const { user } = useAuth()
   const { settings, updateSettings } = useSettings()
+  const { openPanel } = usePanels()
   const ys = String(selectedYear)
+
+  const { net: ekomNet } = calcEkom(
+    settings.ekomPhone[ys] || Array(12).fill(0),
+    settings.ekomInternet[ys] || Array(4).fill(0),
+    settings.ekomPrivateAmt,
+  )
 
   // Seksjonene er uavhengige: flere kan stå åpne samtidig, som før.
   const [open, setOpen] = useState<Record<string, boolean>>({})
@@ -164,6 +172,20 @@ export function SettingsDrawer({ selectedYear, setSelectedYear, years, yearIncom
             <input type="number" value={ratePerPassengerKm} min="0" step="0.01"
               onChange={e => saveRate('drivingRatePerPassengerKm', e.target.value)} className={inputClass} />
           </div>
+        </div>
+      </Section>
+
+      {/* EKOM lå før bak et eget symbol i toppen. Den hører hjemme her: den er
+          en kalkulator som ikke gjør annet enn å skrive til innstillingene. */}
+      <Section title="EKOM" open={!!open.ekom} onToggle={() => toggle('ekom')}
+        summary={ekomNet > 0 ? <span>{kr(ekomNet)}</span> : null}>
+        <div className="mt-2">
+          <p className="text-xs text-slate-400 mb-2">Telefon og internett, årsbeløp på post 7500</p>
+          <button onClick={() => openPanel('ekom')}
+            className="w-full flex items-center justify-between text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 transition">
+            <span>Åpne kalkulatoren</span>
+            <span className="text-slate-400 text-base">→</span>
+          </button>
         </div>
       </Section>
 
