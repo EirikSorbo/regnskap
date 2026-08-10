@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Invoice } from './invoice.ts'
-import { krInt, fmtDate } from './format.ts'
+import { krExact, fmtDate } from './format.ts'
 
 export const DEFAULT_SHORTCUT_NAME = 'Send faktura'
 
@@ -29,26 +29,50 @@ export function invoiceEmailSubject(
   return `${label}${nummer}${fra}`
 }
 
-export function invoiceEmailBody(
-  inv: Pick<Invoice, 'kind' | 'number' | 'total' | 'dueDate'>,
-  companyName?: string,
+/** Opplysningene e-posten trenger utover selve fakturaen. */
+export interface EmailContext {
+  companyName?: string
   /** Navnet under «Vennlig hilsen». En e-post signeres av et menneske, ikke av
    *  et foretak. Er det tomt, faller vi tilbake til foretaksnavnet. */
-  senderName?: string,
+  senderName?: string
+  bankAccount?: string
+}
+
+export function invoiceEmailBody(
+  inv: Pick<Invoice, 'kind' | 'number' | 'total' | 'dueDate'>,
+  ctx: EmailContext = {},
 ): string {
   const isCredit = inv.kind === 'kreditnota'
   const label = isCredit ? 'kreditnota' : 'faktura'
   const nummer = inv.number ? ` nr. ${inv.number}` : ''
-  const fra = companyName?.trim() ? ` fra ${companyName.trim()}` : ''
-  const forfall = !isCredit && inv.dueDate ? `, med forfall ${fmtDate(inv.dueDate, 'd. MMMM yyyy')}` : ''
+  const fra = ctx.companyName?.trim() ? ` fra ${ctx.companyName.trim()}` : ''
+  const forfallsdato = fmtDate(inv.dueDate, 'd. MMMM yyyy')
+  const forfall = !isCredit && inv.dueDate ? `, med forfall ${forfallsdato}` : ''
+
+  // Betalingsopplysningene samlet på egne linjer, så kunden kan lese dem uten
+  // å åpne vedlegget. En kreditnota skal ikke betales, og har derfor verken
+  // forfallsdato eller kontonummer.
+  const betaling = [
+    !isCredit && inv.dueDate ? `Forfallsdato: ${forfallsdato}` : '',
+    inv.number ? `${isCredit ? 'Kreditnotanr.' : 'Fakturanr.'}: ${inv.number}` : '',
+    `Beløp: ${krExact(inv.total)}`,
+    !isCredit && ctx.bankAccount?.trim() ? `Kontonummer: ${ctx.bankAccount.trim()}` : '',
+  ].filter(Boolean).join('\n')
+
   // Takken hører hjemme på en faktura, ikke på en kreditnota: den retter opp
   // noe som ble feil, og da faller den setningen underlig ut.
-  const takk = isCredit ? '' : '\n\nTakk for hyggelig oppdrag!'
-  const signatur = senderName?.trim() || companyName?.trim() || ''
-  const hilsen = signatur ? `\n\nVennlig hilsen\n${signatur}` : ''
-  // Beløpet i hele kroner: ørene sier ingenting i en e-post, og fakturaen
-  // under viser dem uansett.
-  return `Hei.\n\nVedlagt følger ${label}${nummer}${fra} på ${krInt(inv.total)} kr${forfall}.${takk}${hilsen}`
+  const takk = isCredit ? '' : 'Takk for hyggelig oppdrag!'
+  const signatur = ctx.senderName?.trim() || ctx.companyName?.trim() || ''
+  const hilsen = signatur ? `Vennlig hilsen\n${signatur}` : ''
+
+  // Avsnittene settes sammen til slutt, og de tomme faller ut av seg selv.
+  return [
+    'Hei.',
+    `Vedlagt følger ${label}${nummer}${fra} på ${krExact(inv.total)}${forfall}.`,
+    betaling,
+    takk,
+    hilsen,
+  ].filter(Boolean).join('\n\n')
 }
 
 /** mailto-lenke. Mellomrom må bli %20 og ikke +, ellers viser noen e-postklienter

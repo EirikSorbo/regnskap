@@ -17,12 +17,19 @@ test('invoiceEmailSubject: uten nummer og uten foretaksnavn', () => {
 })
 
 test('invoiceEmailBody: hele teksten, ord for ord', () => {
-  const body = invoiceEmailBody({ kind: 'faktura', number: 273, total: 2000, dueDate: '2026-08-24' },
-    'Sørbø Musikk', 'Eirik Sørbø')
+  const body = invoiceEmailBody(
+    { kind: 'faktura', number: 273, total: 2000, dueDate: '2026-08-24' },
+    { companyName: 'Sørbø Musikk', senderName: 'Eirik Sørbø', bankAccount: '63201126217' })
+  const belop = (2000).toLocaleString('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 })
   assert.equal(body, [
     'Hei.',
     '',
-    `Vedlagt følger faktura nr. 273 fra Sørbø Musikk på ${(2000).toLocaleString('nb-NO')} kr, med forfall 24. august 2026.`,
+    `Vedlagt følger faktura nr. 273 fra Sørbø Musikk på ${belop}, med forfall 24. august 2026.`,
+    '',
+    'Forfallsdato: 24. august 2026',
+    'Fakturanr.: 273',
+    `Beløp: ${belop}`,
+    'Kontonummer: 63201126217',
     '',
     'Takk for hyggelig oppdrag!',
     '',
@@ -32,20 +39,31 @@ test('invoiceEmailBody: hele teksten, ord for ord', () => {
 })
 
 test('invoiceEmailBody: beløpet er i hele kroner, uten ører', () => {
-  const body = invoiceEmailBody({ ...faktura, total: 13000.5 }, 'Sørbø Musikk', 'Eirik Sørbø')
-  assert.ok(body.includes(' kr,'))
-  assert.ok(!body.includes(',50'))
+  const body = invoiceEmailBody(faktura, { companyName: 'Sørbø Musikk' })
+  assert.ok(!body.includes(',00'))
+})
+
+test('invoiceEmailBody: ører tas med hvis de finnes', () => {
+  const body = invoiceEmailBody({ ...faktura, total: 6500.5 }, { companyName: 'Sørbø Musikk' })
+  assert.ok(body.includes(',50'))
 })
 
 test('invoiceEmailBody: uten eget signaturnavn brukes foretaksnavnet', () => {
-  const body = invoiceEmailBody(faktura, 'Sørbø Musikk')
+  const body = invoiceEmailBody(faktura, { companyName: 'Sørbø Musikk' })
   assert.ok(body.endsWith('Vennlig hilsen\nSørbø Musikk'))
 })
 
-test('invoiceEmailBody: en kreditnota har verken forfallsdato eller takk', () => {
-  const body = invoiceEmailBody(kreditnota, 'Sørbø Musikk', 'Eirik Sørbø')
-  assert.ok(body.includes('kreditnota nr. 273'))
-  assert.ok(!body.includes('forfall'))
+test('invoiceEmailBody: uten kontonummer faller den linja bort', () => {
+  const body = invoiceEmailBody(faktura, { companyName: 'Sørbø Musikk' })
+  assert.ok(!body.includes('Kontonummer'))
+  assert.ok(body.includes('Fakturanr.: 272'))
+})
+
+test('invoiceEmailBody: en kreditnota har verken forfall, kontonummer eller takk', () => {
+  const body = invoiceEmailBody(kreditnota, { companyName: 'Sørbø Musikk', bankAccount: '63201126217' })
+  assert.ok(body.includes('Kreditnotanr.: 273'))
+  assert.ok(!body.includes('Forfallsdato'))
+  assert.ok(!body.includes('Kontonummer'))
   assert.ok(!body.includes('Takk for'))
 })
 
