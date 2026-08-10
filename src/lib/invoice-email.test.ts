@@ -24,7 +24,7 @@ test('invoiceEmailBody: hele teksten, ord for ord', () => {
   assert.equal(body, [
     'Hei.',
     '',
-    `Vedlagt følger faktura nr. 273 fra Sørbø Musikk på ${belop}, med forfall 24. august 2026.`,
+    'Vedlagt følger faktura nr. 273 fra Sørbø Musikk.',
     '',
     'Forfallsdato: 24. august 2026',
     'Fakturanr.: 273',
@@ -36,6 +36,13 @@ test('invoiceEmailBody: hele teksten, ord for ord', () => {
     'Vennlig hilsen',
     'Eirik Sørbø',
   ].join('\n'))
+})
+
+test('invoiceEmailBody: innledningen gjentar ikke beløp og forfall', () => {
+  // De står i blokken rett under. Å ha dem begge steder gjorde bare teksten
+  // lengre uten å si noe nytt.
+  const linjer = invoiceEmailBody(faktura, { companyName: 'Sørbø Musikk' }).split('\n')
+  assert.equal(linjer[2], 'Vedlagt følger faktura nr. 272 fra Sørbø Musikk.')
 })
 
 test('invoiceEmailBody: beløpet er i hele kroner, uten ører', () => {

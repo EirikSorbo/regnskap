@@ -47,7 +47,6 @@ export function invoiceEmailBody(
   const nummer = inv.number ? ` nr. ${inv.number}` : ''
   const fra = ctx.companyName?.trim() ? ` fra ${ctx.companyName.trim()}` : ''
   const forfallsdato = fmtDate(inv.dueDate, 'd. MMMM yyyy')
-  const forfall = !isCredit && inv.dueDate ? `, med forfall ${forfallsdato}` : ''
 
   // Betalingsopplysningene samlet på egne linjer, så kunden kan lese dem uten
   // å åpne vedlegget. En kreditnota skal ikke betales, og har derfor verken
@@ -66,9 +65,11 @@ export function invoiceEmailBody(
   const hilsen = signatur ? `Vennlig hilsen\n${signatur}` : ''
 
   // Avsnittene settes sammen til slutt, og de tomme faller ut av seg selv.
+  // Innledningen nevner verken beløp eller forfall: de står rett under, og å
+  // gjenta dem gjorde bare teksten lengre uten å si noe nytt.
   return [
     'Hei.',
-    `Vedlagt følger ${label}${nummer}${fra} på ${krExact(inv.total)}${forfall}.`,
+    `Vedlagt følger ${label}${nummer}${fra}.`,
     betaling,
     takk,
     hilsen,
