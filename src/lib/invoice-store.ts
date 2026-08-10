@@ -4,7 +4,7 @@
 //  Reglene bor i invoice.ts; her er kallene som gjør dem virkelige.
 // ---------------------------------------------------------------------------
 
-import { collection, doc, addDoc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore'
+import { collection, doc, addDoc, updateDoc, deleteDoc, deleteField, runTransaction } from 'firebase/firestore'
 import { db } from '../firebase'
 import { stripUndefined } from './firestore-data'
 import {
@@ -17,8 +17,6 @@ export interface DraftInput {
   customer: InvoiceCustomer
   lines: InvoiceLine[]
   issueDate: string
-  deliveryDate?: string
-  deliveryPlace?: string
   dueDate?: string
   note?: string
   kind?: Invoice['kind']
@@ -30,6 +28,8 @@ function draftFields(uid: string, input: DraftInput) {
     description: l.description,
     quantity: Number(l.quantity) || 0,
     unitPrice: Number(l.unitPrice) || 0,
+    ...(l.date?.trim() ? { date: l.date.trim() } : {}),
+    ...(l.place?.trim() ? { place: l.place.trim() } : {}),
   }))
   // Siste skanse mot undefined-felter: Firestore avviser dem, og feilen kommer
   // først når du trykker lagre. Kunden kan komme både fra registeret og fra
@@ -41,11 +41,6 @@ function draftFields(uid: string, input: DraftInput) {
     customer: input.customer,
     lines,
     issueDate: input.issueDate,
-    // Leveringstidspunktet er som regel fakturadatoen, og leveringsstedet
-    // kundens sted. Vi lagrer den utledede verdien, ikke bare et tomt felt, så
-    // dokumentet er komplett i seg selv.
-    deliveryDate: input.deliveryDate || input.issueDate,
-    deliveryPlace: (input.deliveryPlace || input.customer.city || '').trim(),
     dueDate: input.dueDate || addDays(input.issueDate, DEFAULT_PAYMENT_TERMS_DAYS),
     note: input.note ?? '',
     total: invoiceTotal(lines),
@@ -61,7 +56,14 @@ export async function createDraft(uid: string, input: DraftInput): Promise<strin
 /** Lagrer endringer på en kladd. Utstedte fakturaer stoppes av utstedelses-
  *  transaksjonen og av at skjermbildet ikke tilbyr redigering. */
 export async function updateDraft(uid: string, id: string, input: DraftInput): Promise<void> {
-  await updateDoc(doc(db, 'invoices', id), draftFields(uid, input))
+  await updateDoc(doc(db, 'invoices', id), {
+    ...draftFields(uid, input),
+    // Leveringen ligger på linjene nå. Er kladden fra før den endringen, bærer
+    // den et automatisk utfylt beløp på fakturanivå som ofte var feil dato —
+    // det ryddes vekk her i stedet for å bli stående og motsi linjene.
+    deliveryDate: deleteField(),
+    deliveryPlace: deleteField(),
+  })
 }
 
 export async function deleteDraft(id: string): Promise<void> {
@@ -128,10 +130,8 @@ export async function createCreditNote(uid: string, original: Invoice, issueDate
     creditsInvoiceId: original.id,
     customer: original.customer,
     lines: original.lines,
+    // Linjene bærer leveringsopplysningene, og kopieres som de er.
     issueDate,
-    // Kreditnotaen gjelder den samme leveransen som fakturaen den retter.
-    deliveryDate: original.deliveryDate,
-    deliveryPlace: original.deliveryPlace,
     note: `Kreditnota for faktura ${original.number ?? ''}`.trim(),
   })
 }

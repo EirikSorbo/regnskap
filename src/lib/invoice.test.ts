@@ -4,6 +4,7 @@ import {
   type Invoice, lineTotal, invoiceTotal, addDays, isOverdue, outstandingTotal,
   canEdit, canDelete, canCredit, statusLabel, validateForIssue,
   incomeAmount, incomeDescription, addressLines, numberGaps, invoiceFileName, toInvoiceCustomer,
+  hasLineDelivery,
 } from './invoice.ts'
 
 function invoice(p: Partial<Invoice> = {}): Invoice {
@@ -130,6 +131,34 @@ test('addressLines: postnummer og sted på én linje, Norge utelates', () => {
 test('addressLines: utenlandsk land tas med', () => {
   assert.deepEqual(addressLines({ name: 'Anna', address: 'Kungsgatan 2', postalCode: '11135', city: 'Stockholm', country: 'Sverige' }),
     ['Kungsgatan 2', '11135 Stockholm', 'Sverige'])
+})
+
+// --- levering per linje ---
+
+test('hasLineDelivery: sann når minst én linje har dato eller sted', () => {
+  assert.equal(hasLineDelivery([{ description: 'a', quantity: 1, unitPrice: 100 }]), false)
+  assert.equal(hasLineDelivery([
+    { description: 'a', quantity: 1, unitPrice: 100 },
+    { description: 'b', quantity: 1, unitPrice: 100, date: '2026-06-30' },
+  ]), true)
+  assert.equal(hasLineDelivery([{ description: 'a', quantity: 1, unitPrice: 100, place: 'Fiskebrygga' }]), true)
+})
+
+test('hasLineDelivery: blanke felter teller ikke som utfylt', () => {
+  assert.equal(hasLineDelivery([{ description: 'a', quantity: 1, unitPrice: 100, date: '  ', place: '' }]), false)
+})
+
+test('to spillejobber på én faktura kan ha hver sin dato og sted', () => {
+  // Kjernen i endringen: én leveringsdato per faktura kunne ikke beskrive en
+  // faktura som dekker 30. juni og 21. juli, og fylte da ut fakturadatoen —
+  // en dato ingen av jobbene hadde.
+  const lines = [
+    { description: 'Spilte med Bryggebandet', quantity: 1, unitPrice: 6500, date: '2026-06-30', place: 'Fiskebrygga' },
+    { description: 'Spilte med Bryggebandet', quantity: 1, unitPrice: 6500, date: '2026-07-21', place: 'Fiskebrygga' },
+  ]
+  assert.equal(invoiceTotal(lines), 13000)
+  assert.equal(hasLineDelivery(lines), true)
+  assert.deepEqual(lines.map(l => l.date), ['2026-06-30', '2026-07-21'])
 })
 
 // --- kunde fryst på faktura ---

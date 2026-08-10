@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import {
   type Invoice, lineTotal, addressLines, statusLabel, canEdit, canDelete, canCredit, invoiceFileName,
+  hasLineDelivery,
 } from '../lib/invoice'
 import { issueInvoice, markPaid, markUnpaid, deleteDraft, createCreditNote } from '../lib/invoice-store'
 import { kr, fmtDate } from '../lib/format'
@@ -62,6 +63,9 @@ export default function InvoiceViewPage() {
   const isCredit = invoice.kind === 'kreditnota'
   const title = isCredit ? 'Kreditnota' : 'Faktura'
   const missingCompany = !company.name?.trim() || !company.orgNumber?.trim()
+  // Kolonnene for levering vises bare når linjene faktisk bærer dem, så en
+  // enkel faktura slipper to tomme kolonner.
+  const showDelivery = hasLineDelivery(invoice.lines)
 
   return (
     <div className="report-page bg-white min-h-screen">
@@ -180,7 +184,9 @@ export default function InvoiceViewPage() {
           <thead>
             <tr className="border-b-2 border-slate-200">
               <th className="text-left py-3 font-semibold text-slate-600">Beskrivelse</th>
-              <th className="text-right py-3 font-semibold text-slate-600 w-20">Antall</th>
+              {showDelivery && <th className="text-left py-3 font-semibold text-slate-600 w-28">Dato</th>}
+              {showDelivery && <th className="text-left py-3 font-semibold text-slate-600 w-32">Sted</th>}
+              <th className="text-right py-3 font-semibold text-slate-600 w-16">Antall</th>
               <th className="text-right py-3 font-semibold text-slate-600 w-28">Pris</th>
               <th className="text-right py-3 font-semibold text-slate-600 w-32">Sum</th>
             </tr>
@@ -189,6 +195,8 @@ export default function InvoiceViewPage() {
             {invoice.lines.map((l, i) => (
               <tr key={i} className="border-b border-slate-100">
                 <td className="py-3 text-slate-700">{l.description}</td>
+                {showDelivery && <td className="py-3 text-slate-600 tabular-nums whitespace-nowrap">{l.date ? fmtDate(l.date, 'dd.MM.yyyy') : ''}</td>}
+                {showDelivery && <td className="py-3 text-slate-600">{l.place ?? ''}</td>}
                 <td className="py-3 text-right tabular-nums text-slate-600">{l.quantity}</td>
                 <td className="py-3 text-right tabular-nums text-slate-600">{kr(l.unitPrice)}</td>
                 <td className="py-3 text-right tabular-nums font-medium text-slate-800">{kr(lineTotal(l))}</td>
@@ -197,7 +205,7 @@ export default function InvoiceViewPage() {
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={3} className="py-4 font-semibold text-slate-600">{isCredit ? 'Å godskrive' : 'Å betale'}</td>
+              <td colSpan={showDelivery ? 5 : 3} className="py-4 font-semibold text-slate-600">{isCredit ? 'Å godskrive' : 'Å betale'}</td>
               <td className="py-4 text-right tabular-nums font-bold text-slate-800 text-lg">{kr(invoice.total)}</td>
             </tr>
           </tfoot>

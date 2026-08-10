@@ -23,6 +23,14 @@ export interface InvoiceLine {
   description: string
   quantity: number
   unitPrice: number
+  /** Når og hvor denne linjen ble levert.
+   *
+   *  Leveringen hører til linjen, ikke fakturaen. En faktura kan dekke to
+   *  spillejobber på ulike datoer og steder, og da finnes det ingen ETT riktig
+   *  svar på fakturanivå. Feltene på fakturaen under er beholdt for fakturaer
+   *  som ble laget før dette. */
+  date?: string
+  place?: string
 }
 
 export interface InvoiceCustomer {
@@ -59,10 +67,9 @@ export interface Invoice {
   lines: InvoiceLine[]
   /** Fakturadatoen. Denne styrer hvilket år inntekten havner i. */
   issueDate: string
-  /** Når og hvor ytelsen ble levert. Bokføringsforskriften § 5-1-1 krever at
-   *  salgsdokumentet angir tidspunkt og sted for levering, og for en spillejobb
-   *  er det dessuten den opplysningen kunden kjenner igjen. Mangler på fakturaer
-   *  importert fra det gamle systemet, som ikke hadde feltene i eksporten. */
+  /** Leveringsopplysninger på fakturanivå. Brukes ikke på nye fakturaer, der
+   *  hver linje bærer sin egen; beholdt for fakturaer laget før den endringen,
+   *  og vises da fortsatt. */
   deliveryDate?: string
   deliveryPlace?: string
   dueDate: string
@@ -197,6 +204,13 @@ export function toInvoiceCustomer(c: InvoiceCustomer): InvoiceCustomer {
     if (v !== undefined) out[key] = v
   }
   return out
+}
+
+/** Har noen av linjene leveringsopplysninger? Styrer om fakturaen viser
+ *  kolonnene for dato og sted, slik at en enkel faktura slipper to tomme
+ *  kolonner. */
+export function hasLineDelivery(lines: InvoiceLine[]): boolean {
+  return lines.some((l) => (l.date ?? '').trim() !== '' || (l.place ?? '').trim() !== '')
 }
 
 /** Numrene som mangler i en fakturarekke. Bokføringsreglene krever en

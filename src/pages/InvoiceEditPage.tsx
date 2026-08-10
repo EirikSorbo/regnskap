@@ -32,8 +32,6 @@ export default function InvoiceEditPage() {
   const [saveToRegister, setSaveToRegister] = useState(true)
   const [lines, setLines] = useState<InvoiceLine[]>([{ ...EMPTY_LINE }])
   const [issueDate, setIssueDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [deliveryDate, setDeliveryDate] = useState('')
-  const [deliveryPlace, setDeliveryPlace] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(!!id)
@@ -42,10 +40,6 @@ export default function InvoiceEditPage() {
 
   const termsDays = settings.paymentTermsDays ?? DEFAULT_PAYMENT_TERMS_DAYS
   const effectiveDue = dueDate || addDays(issueDate, termsDays)
-  // Leveringen skjedde som regel på fakturadatoen, hos kunden. Feltene er
-  // forhåndsutfylt med det, og kan overstyres når det ikke stemmer.
-  const effectiveDeliveryDate = deliveryDate || issueDate
-  const effectiveDeliveryPlace = deliveryPlace || customer.city || ''
   const total = invoiceTotal(lines)
   const problems = validateForIssue({ customer, lines, issueDate })
 
@@ -59,8 +53,6 @@ export default function InvoiceEditPage() {
       setSaveToRegister(false)
       setLines(inv.lines.length ? inv.lines : [{ ...EMPTY_LINE }])
       setIssueDate(inv.issueDate)
-      setDeliveryDate(inv.deliveryDate ?? '')
-      setDeliveryPlace(inv.deliveryPlace ?? '')
       setDueDate(inv.dueDate)
       setNote(inv.note ?? '')
       setLoading(false)
@@ -78,10 +70,7 @@ export default function InvoiceEditPage() {
    *  den uten å lagre to ganger. */
   async function persist(): Promise<string | null> {
     if (!user) return null
-    const input = {
-      customer, lines, issueDate, dueDate: effectiveDue, note,
-      deliveryDate: effectiveDeliveryDate, deliveryPlace: effectiveDeliveryPlace,
-    }
+    const input = { customer, lines, issueDate, dueDate: effectiveDue, note }
     if (saveToRegister && customer.name.trim()) {
       const exists = customers.some(c =>
         c.name.trim().toLowerCase() === customer.name.trim().toLowerCase()
@@ -138,7 +127,11 @@ export default function InvoiceEditPage() {
         </section>
 
         <section>
-          <h2 className="text-sm font-semibold text-slate-700 mb-2">Linjer</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">Linjer</h2>
+          <p className="text-xs text-slate-400 mb-2">
+            Dato og sted hører til den enkelte jobben, ikke fakturaen. Dekker fakturaen to spillejobber,
+            får hver linje sin egen.
+          </p>
           <div className="space-y-3">
             {lines.map((l, i) => (
               <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
@@ -148,6 +141,18 @@ export default function InvoiceEditPage() {
                   <button type="button" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}
                     disabled={lines.length === 1} title="Fjern linje"
                     className="text-slate-300 hover:text-red-400 disabled:opacity-30 p-2 shrink-0"><IconTrash /></button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-400 mb-0.5">Dato</label>
+                    <input type="date" value={l.date ?? ''} onChange={e => setLine(i, { date: e.target.value })}
+                      className={inp} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-400 mb-0.5">Sted</label>
+                    <input value={l.place ?? ''} onChange={e => setLine(i, { place: e.target.value })}
+                      className={inp} placeholder="F.eks. Fiskebrygga" />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-20">
@@ -179,21 +184,10 @@ export default function InvoiceEditPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-slate-700">Datoer og levering</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Datoer</h2>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Fakturadato (styrer hvilket år inntekten føres på)</label>
             <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Leveringsdato</label>
-            <input type="date" value={effectiveDeliveryDate} onChange={e => setDeliveryDate(e.target.value)} className={inp} />
-            {!deliveryDate && <p className="text-xs text-slate-400 mt-1">Satt til fakturadatoen. Endre hvis jobben var en annen dag.</p>}
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Leveringssted</label>
-            <input value={effectiveDeliveryPlace} onChange={e => setDeliveryPlace(e.target.value)} className={inp}
-              placeholder="F.eks. Søgne kirke" />
-            {!deliveryPlace && customer.city && <p className="text-xs text-slate-400 mt-1">Satt til kundens sted. Endre til spillestedet hvis det er et annet.</p>}
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Forfallsdato</label>
