@@ -158,8 +158,12 @@ export default function AddReceiptPage() {
             const storageRef = ref(storage, path)
             // Innholdstypen MÅ settes. Uten den lagres filen som
             // «application/octet-stream», og da laster nettleseren den ned i
-            // stedet for å vise den når du åpner lenken.
-            await uploadBytes(storageRef, f, f.type ? { contentType: f.type } : undefined)
+            // stedet for å vise den når du åpner lenken. «inline» sier at den
+            // skal vises, ikke lastes ned.
+            await uploadBytes(storageRef, f, {
+              contentDisposition: 'inline',
+              ...(f.type ? { contentType: f.type } : {}),
+            })
             const url = await getDownloadURL(storageRef)
             imagePaths.push(path)
             imageUrls.push(url)

@@ -4,12 +4,13 @@ import { ModalShell } from './Modal'
 
 /** Vedlegget vist inne i appen.
  *
- *  En lenke rett til filen lastes ned i stedet for å vises, fordi filene i
- *  Storage mangler riktig innholdstype: nettleseren vet ikke at det er et bilde
- *  og lagrer det i stedet. Her tegner vi bildet selv, og da spiller det ingen
- *  rolle hva serveren kaller filen.
+ *  Bildet tegnes her framfor å åpnes som en lenke. En del av vedleggene ble
+ *  lastet opp uten innholdstype, og en lenke til en slik fil laster den ned i
+ *  stedet for å vise den. Tegner vi bildet selv, spiller det ingen rolle hva
+ *  serveren kaller filen.
  *
- *  PDF-er kan ikke tegnes på samme måte, så de får en knapp som åpner dem. */
+ *  PDF-er tegnes i en ramme. Den krever at filen faktisk er merket som PDF i
+ *  Storage; er den ikke det, vises ingenting, og knappen under er utveien. */
 export function AttachmentModal({ paths, urls, onClose }: {
   paths: string[]
   urls: string[]
@@ -56,11 +57,25 @@ function Vedlegg({ path, fallback, nummer, antall }: {
 
       {!url ? (
         <div className="h-48 rounded-lg border border-slate-100 bg-slate-50 animate-pulse" />
-      ) : erPdf || feilet ? (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center space-y-2">
-          <p className="text-sm text-slate-500">
-            {erPdf ? 'PDF-er vises ikke her.' : 'Kunne ikke vise vedlegget her.'}
+      ) : erPdf ? (
+        <>
+          {/* Rammen viser PDF-en med nettleserens egen visning. På iPhone tegner
+              Safari bare første side her, så knappen under er ikke pynt. */}
+          <iframe src={url} title={`Vedlegg ${nummer}`}
+            className="w-full h-[60vh] rounded-lg border border-slate-200 bg-white" />
+          {/* Ikke alle nettlesere tegner PDF i en ramme. Blir den stående tom,
+              skal det stå hvorfor, i stedet for et hvitt felt uten forklaring. */}
+          <p className="text-xs text-slate-400">
+            Står rammen tom, viser ikke nettleseren PDF her.{' '}
+            <button type="button" onClick={() => openAttachment(path, fallback)}
+              className="text-blue-600 hover:underline">
+              Åpne i egen fane
+            </button>
           </p>
+        </>
+      ) : feilet ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center space-y-2">
+          <p className="text-sm text-slate-500">Kunne ikke vise vedlegget her.</p>
           <button type="button" onClick={() => openAttachment(path, fallback)}
             className="text-sm text-blue-600 hover:underline">
             Åpne i ny fane

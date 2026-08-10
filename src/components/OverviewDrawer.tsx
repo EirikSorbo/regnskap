@@ -133,8 +133,9 @@ export function OverviewDrawer({ selectedYear, attachmentCount, onOpenResult, on
         <div className="border-t border-slate-100 pt-4">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Vedlikehold</p>
           <p className="text-xs text-slate-400 mb-3">
-            Lastes PDF-ene ned i stedet for å vises? Da mangler de filtype. Dette setter den
-            riktig på alle {vedleggsstier.length} vedleggene. Selve filene røres ikke.
+            Lastes vedlegg ned i stedet for å vises? Dette setter riktig filtype på alle
+            {' '}{vedleggsstier.length} vedleggene, og merker dem som noe som skal vises i
+            nettleseren. Selve filene røres ikke.
           </p>
           <button onClick={rettInnholdstyper} disabled={retter}
             className="w-full text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 hover:bg-slate-50 disabled:opacity-60 transition">

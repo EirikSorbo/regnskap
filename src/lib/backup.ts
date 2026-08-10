@@ -282,8 +282,10 @@ export async function runImport(opts: ImportOptions): Promise<string> {
         // uten den blir filen liggende som «application/octet-stream». Da laster
         // nettleseren den ned i stedet for å vise den. Nettopp dette skjedde med
         // vedleggene som allerede lå der.
-        await uploadBytes(ref(storage, path), af.blob,
-          { contentType: contentTypeFor(af.name) ?? 'application/octet-stream' })
+        await uploadBytes(ref(storage, path), af.blob, {
+          contentType: contentTypeFor(af.name) ?? 'application/octet-stream',
+          contentDisposition: 'inline',
+        })
         filesUploaded++
       } catch (err) {
         console.warn('Vedlegg-feil:', af.name, err)

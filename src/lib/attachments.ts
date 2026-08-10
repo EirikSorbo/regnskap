@@ -65,11 +65,16 @@ export function contentTypeFor(path: string): string | null {
   return MIME[ext] ?? null
 }
 
-/** Setter riktig innholdstype på vedlegg som allerede ligger i Storage.
+/** Setter riktig innholdstype og «vis i nettleseren» på vedlegg som allerede
+ *  ligger i Storage.
  *
  *  Filer lastet opp uten innholdstype ble liggende som
  *  «application/octet-stream». Nettleseren aner da ikke at det er en PDF eller
  *  et bilde, og laster filen ned i stedet for å vise den.
+ *
+ *  Innholdstypen alene er ikke alltid nok: er contentDisposition satt til
+ *  «attachment», laster nettleseren ned uansett hva filen inneholder. Derfor
+ *  settes den eksplisitt til «inline».
  *
  *  Dette endrer BARE metadataen. Filen røres ikke, og nedlastingstokenet består,
  *  i motsetning til en ny opplasting, som ville gitt filen et nytt token og
@@ -84,7 +89,7 @@ export async function repairContentTypes(
     const contentType = contentTypeFor(path)
     if (!contentType) { hoppetOver++; ferdig++; onProgress?.(ferdig, paths.length); continue }
     try {
-      await updateMetadata(ref(storage, path), { contentType })
+      await updateMetadata(ref(storage, path), { contentType, contentDisposition: 'inline' })
       rettet++
     } catch (err) {
       console.warn('Kunne ikke rette innholdstype:', path, err)

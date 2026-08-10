@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { usePanels } from '../context/PanelsContext'
 import { IconGear, IconReport } from './icons'
 
-export const VERSION = 'v1.87'
+export const VERSION = 'v1.88'
 
 /** Toppen, lik på alle sidene den brukes: de to hovedfanene til venstre,
  *  rapportering og innstillinger som symboler til høyre.
