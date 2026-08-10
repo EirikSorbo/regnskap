@@ -1,19 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { useAccounting } from '../context/AccountingContext'
 import { usePanels } from '../context/PanelsContext'
 import { type Entry, filterEntries } from '../types'
-import { useMigrations } from '../hooks/useMigrations'
 import { deleteEntry } from '../lib/entries'
 import { kr } from '../lib/format'
 import { EntryList } from '../components/EntryList'
 import { BackupReminder } from '../components/BackupReminder'
 
 export default function DashboardPage() {
-  const { user } = useAuth()
-  const { settings, updateSettings } = useSettings()
+  const { settings } = useSettings()
   const navigate = useNavigate()
 
   // Regnskapet regnes ut i AccountingContext, og panelene bor i PanelsContext.
@@ -22,8 +19,6 @@ export default function DashboardPage() {
     loading, error, selectedYear, yearEntries, totalIncome, totalExpenses, amountOf,
   } = useAccounting()
   const { busy, runFullBackup } = usePanels()
-
-  useMigrations(user, settings, updateSettings)
 
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)

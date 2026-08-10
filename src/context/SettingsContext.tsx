@@ -22,9 +22,10 @@ export interface UserSettings {
   categories?: Category[]  // brukerens redigerbare kontoplan; default = CATEGORIES
   assets?: Asset[]  // driftsmiddel-register for saldoavskrivning (post 6000)
   lastBackupAt?: number  // timestamp of last full backup
-  postNumbersMigrated?: boolean
-  shadowReceiptsRemoved?: boolean  // engangs-migrering: skjulte EKOM/HK/avskr.-kvitteringer slettet
-  deliveryFieldsRemoved?: boolean  // engangs-migrering: leveringsdato/-sted ryddet av fakturaene
+  // Her lå tre flagg for engangs-migreringer (postnumre, skygge-kvitteringer,
+  // leveringsfelter). Alle tre er kjørt ferdig og koden er fjernet. Flaggene
+  // kan fortsatt ligge i innstillingsdokumentet og i gamle backuper; de gjør
+  // ingen skade, men ingenting leser dem lenger.
   // --- Fakturering ---
   company?: CompanyInfo  // avsenderopplysningene på fakturaen
   /** Neste ledige fakturanummer. Tildeles i en transaksjon ved utstedelse, så
