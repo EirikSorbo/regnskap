@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext'
 import { useSettings } from './SettingsContext'
 import { useAccounting } from './AccountingContext'
 import { SETTINGS_MANAGED_POSTS } from '../types'
+import { incomeIsDerived } from '../lib/income'
 import { downloadJsonBackup, downloadAttachmentZip, downloadFullBackup, downloadCsv } from '../lib/backup'
 import { Drawer } from '../components/Modal'
 import { SettingsDrawer } from '../components/SettingsDrawer'
@@ -152,6 +153,7 @@ export function PanelsProvider({ children }: { children: ReactNode }) {
           tripCount={acc.trips.length}
           totalKm={acc.totalKm}
           taxPaidTerms={settings.forskuddsskatt?.[String(acc.selectedYear)]}
+          incomeDerived={incomeIsDerived(acc.yearIncome)}
           onClose={() => setModal(null)}
         />
       )}

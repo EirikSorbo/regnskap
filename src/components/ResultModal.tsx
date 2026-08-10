@@ -5,7 +5,7 @@ import { IconX } from './icons'
 
 /** Resultatoppstillingen for året, slik den ser ut i Altinn: inntekt, hver post,
  *  og driftsresultatet nederst. */
-export function ResultModal({ year, groups, totalIncome, totalExpenses, entryCount, tripCount, totalKm, taxPaidTerms, onClose }: {
+export function ResultModal({ year, groups, totalIncome, totalExpenses, entryCount, tripCount, totalKm, taxPaidTerms, incomeDerived, onClose }: {
   year: number
   groups: PostGroup[]
   totalIncome: number
@@ -15,6 +15,9 @@ export function ResultModal({ year, groups, totalIncome, totalExpenses, entryCou
   totalKm: number
   /** Innbetalt forskuddsskatt per termin for året, hvis noe er registrert. */
   taxPaidTerms?: number[]
+  /** Sann når årets inntekt er utledet fra fakturaene framfor ført som egne
+   *  rader. Da bør det stå, så tallet ikke ser ut som et bilag det ikke er. */
+  incomeDerived?: boolean
   onClose: () => void
 }) {
   const result = totalIncome - totalExpenses
@@ -61,6 +64,11 @@ export function ResultModal({ year, groups, totalIncome, totalExpenses, entryCou
             {krInt(totalIncome)} kr
           </span>
         </div>
+        {incomeDerived && (
+          <p className="text-[11px] text-slate-400 mt-1">
+            Regnet ut fra fakturaene for {year}. Året har ingen egne inntektsføringer.
+          </p>
+        )}
       </div>
 
       <div className="mx-6 border-t border-slate-100" />

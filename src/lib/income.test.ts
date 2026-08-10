@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { effectiveIncome } from './income.ts'
+import { effectiveIncome, incomeIsDerived } from './income.ts'
 import type { IncomeEntry } from '../types.ts'
 import type { Invoice } from './invoice.ts'
 
@@ -62,4 +62,31 @@ test('blandet år: rad for den ene fakturaen, utledet for den andre', () => {
      faktura({ id: 'f2', issueDate: '2026-03-01', total: 2500 })])
   assert.equal(r.length, 2)
   assert.equal(sum(r), 7500)
+})
+
+// Slik ser de gamle årene ut: én årssum ført for hånd 31. desember, uten
+// kobling til noen faktura, pluss fakturaene som dokumenterer den. Legges de
+// oppå hverandre, dobles hele året.
+test('år med håndført årssum får IKKE inntekt utledet fra fakturaene', () => {
+  const r = effectiveIncome([inntekt({ id: 'i1', amount: 91207, date: '2025-12-31' })], [
+    faktura({ id: 'f1', issueDate: '2025-03-04', total: 40000 }),
+    faktura({ id: 'f2', issueDate: '2025-09-20', total: 51207 }),
+  ])
+  assert.equal(r.length, 1)
+  assert.equal(sum(r), 91207)
+})
+
+test('håndført årssum i ett år stopper ikke utledning i et annet', () => {
+  const r = effectiveIncome(
+    [inntekt({ id: 'i1', amount: 91207, date: '2025-12-31' })],
+    [faktura({ id: 'f1', issueDate: '2015-06-01', total: 4500 })])
+  assert.equal(sum(r.filter(i => i.date.startsWith('2015'))), 4500)
+  assert.equal(sum(r.filter(i => i.date.startsWith('2025'))), 91207)
+})
+
+test('incomeIsDerived skiller utledet inntekt fra ført inntekt', () => {
+  const utledet = effectiveIncome([], [faktura({ id: 'f1', issueDate: '2015-06-01' })])
+  assert.equal(incomeIsDerived(utledet), true)
+  assert.equal(incomeIsDerived([inntekt({ id: 'i1' })]), false)
+  assert.equal(incomeIsDerived([]), false)
 })

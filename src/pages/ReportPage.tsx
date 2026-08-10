@@ -7,6 +7,7 @@ import {
 } from '../types'
 import { statusLabel } from '../lib/invoice'
 import { incomeWithoutInvoice, invoiceNumberGaps, sumIncome } from '../lib/year-end'
+import { incomeIsDerived } from '../lib/income'
 import { kr2 as fmt, krInt as fmtInt, fmtDate, MONTHS, QUARTERS } from '../lib/format'
 import { IconArrowLeft, IconPrint } from '../components/icons'
 import { format } from 'date-fns'
@@ -77,6 +78,7 @@ export default function ReportPage() {
   // arket forklarte forskjellen.
   const utenFaktura = incomeWithoutInvoice(yearIncome)
   const utenFakturaSum = sumIncome(utenFaktura)
+  const inntektUtledet = incomeIsDerived(yearIncome)
 
   const getAmount = (entry: Entry) => entryAmount(entry, ratePerKm, ratePerPassengerKm)
 
@@ -486,6 +488,12 @@ export default function ReportPage() {
               {gapsInSeries.length > 0 && (
                 <p className="text-xs text-amber-700 mt-4">
                   Merk: nummerrekken har hull ved {gapsInSeries.join(', ')}. Fakturaer kan være utstedt i et annet år.
+                </p>
+              )}
+              {inntektUtledet && (
+                <p className="text-xs text-slate-500 mt-4">
+                  Årets inntekt er regnet ut fra fakturaene over. {year} har ingen egne
+                  inntektsføringer i appen, slik nyere år har.
                 </p>
               )}
               {utenFakturaSum !== 0 && (
